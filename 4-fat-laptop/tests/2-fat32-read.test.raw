@@ -1,0 +1,53 @@
+DEBUG:done with options: dev name=</dev/cu.usbserial-310>, pi-prog=<./tests/2-fat32-read.bin>, trace=0
+opened tty port </dev/cu.usbserial-310>.
+DEBUG:my-install: tty-usb=</dev/cu.usbserial-310> program=<./tests/2-fat32-read.bin>: about to boot
+TRACE:simple_boot: sending 31540 bytes, crc32=3df0e0a3
+BOOT:waiting for a start
+DEBUG:PRINT_STRING:pi sent print: <aditi: success: Received the program! UART>
+BOOT:bootloader: Done.
+Reading the MBR.
+Loading the first partition.
+Loading the FAT.
+fsinfo printed: :
+	sig1              = 0x41615252
+	sig2              = 0x61417272
+	sig3              = 0xaa550000
+	free cluster cnt  = 484733
+	next free cluster = 0x4b5
+TRACE:fat32_mk:begin lba = 8790
+TRACE:fat32_mk:cluster begin lba = 16384
+TRACE:fat32_mk:sectors per cluster = 64
+TRACE:fat32_mk:root dir first cluster = 2
+Loading the root directory.
+Listing files:
+Got 19 files.
+	F: BLIN~112.BIN (cluster 584; 72 bytes)
+	F: _BLI~123.BIN (cluster 592; 4096 bytes)
+	F: BLIN~114.BIN (cluster 585; 3808 bytes)
+	F: _BLI~124.BIN (cluster 593; 4096 bytes)
+	F: BOOTCODE.BIN (cluster 586; 50248 bytes)
+	F: _BOO~125.BIN (cluster 595; 4096 bytes)
+	F: BOOT~117.BIN (cluster 587; 2067364 bytes)
+	F: SPOTL~19.    (cluster 224; 0 bytes)
+	F: FSEVE~22.    (cluster 945; 0 bytes)
+	F: _BOO~126.BIN (cluster 659; 4096 bytes)
+	F: CONFIG.TXT (cluster 588; 179 bytes)
+	F: _CON~127.TXT (cluster 660; 4096 bytes)
+	F: HELLO.BIN (cluster 589; 1404 bytes)
+	F: _HEL~128.BIN (cluster 661; 4096 bytes)
+	F: KERNEL.IMG (cluster 1077; 2069644 bytes)
+	F: _KERN~36.IMG (cluster 1204; 4096 bytes)
+	F: START.ELF (cluster 591; 2818884 bytes)
+	F: _STA~130.ELF (cluster 812; 4096 bytes)
+	F: TRAS~111.    (cluster 580; 0 bytes)
+Looking for config.txt.
+Reading config.txt.
+EMMC_WARN: Retrying data command
+EMMC_WARN: Retrying data command
+EMMC_ERR: Giving up data command
+EMMC_ERR: READ FAILED: sector=-4178048, size=32768
+PANIC:pi-sd.c:pi_sd_read:38:could not read from sd card: result = -1
+
+DONE!!!
+
+bootloader: pi exited.  cleaning up
