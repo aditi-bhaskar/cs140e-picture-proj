@@ -52,45 +52,45 @@ static uint32_t min(uint32_t a, uint32_t b) {
 
 void create_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_directory_t files) {
 
-    // // create a file; name it a random number like demo_{num}
-    // char filename[7] = {'d','e','m','o','_',unique_file_id,'\0'};
-    // unique_file_id++;
+    // create a file; name it a random number like demo_{num}
+    char filename[7] = {'d','e','m','o','_',unique_file_id,'\0'};
+    unique_file_id++;
 
-    // pi_dirent_t *created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
+    pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
 
-    // while(1) {
-    //     if (!gpio_read(input_single)) {
-    //         // save file & return
-    //         printk("broke out of create_file");
-    //         break;
-    //     }
+    while(1) {
+        if (!gpio_read(input_single)) {
+            // save file & return
+            printk("broke out of create_file");
+            break;
+        }
 
-    //     pi_file_t *file = fat32_read(&fs, directory, filename);
+        pi_file_t *file = fat32_read(fs, directory, filename);
 
-    //     // these buttons write to file
-    //     if (!gpio_read(input_left)) {
-    //         // write : "prefetch flush "
-    //         char words = "*prefetch flush ";
-    //         (file->data[file->n_data]) = words;
-    //         // file->n_data += words.size(); // TODO DO SOMETHING LIKE THIS
-    //         int writ = fat32_write(&fs, files.dirents, filename, file);
-    //         printk("wrote prefetch flush to file \n");
-    //         // TODO display this stuff on screen
-    //         delay_ms(400);
-    //     }
-    //     if (!gpio_read(input_bottom)) {
-    //         // write : "MORE PIZZA "
-    //         delay_ms(400);
-    //     }
-    //     if (!gpio_read(input_top)) {
-    //         // write : "Dawson "
-    //         delay_ms(400);
-    //     }
-    //     if (!gpio_read(input_right)) {
-    //         // write : "minor "
-    //         delay_ms(400);
-    //     }
-    // }
+        // these buttons write to file
+        if (!gpio_read(input_left)) {
+            // write : "prefetch flush* "
+            char *words = "*prefetch flush* ";
+            (file->data[file->n_data]) = *words;
+            // file->n_data += words.size(); // TODO DO SOMETHING LIKE THIS
+            int writ = fat32_write(fs, files.dirents, filename, file);
+            printk("wrote prefetch flush to file \n");
+            // TODO display this stuff on screen
+            delay_ms(400);
+        }
+        if (!gpio_read(input_bottom)) {
+            // write : "MORE PIZZA "
+            delay_ms(400);
+        }
+        if (!gpio_read(input_top)) {
+            // write : "Dawson "
+            delay_ms(400);
+        }
+        if (!gpio_read(input_right)) {
+            // write : "minor "
+            delay_ms(400);
+        }
+    }
 
 }
 
