@@ -286,26 +286,31 @@ pi_file_t *fat32_read(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
   demand(directory->is_dir_p, "tried to use a file as a directory!");
 
   // TODO: read the dirents of the provided directory and look for one matching the provided name
-  pi_dirent_t* pi_dirent = fat32_stat(fs, directory, filename);
-  if (pi_dirent == NULL) {printk ("ERROR!"); return NULL;}
+  pi_dirent_t *file_match = fat32_stat(fs, directory, filename);
 
   // TODO: figure out the length of the cluster chain
-  uint32_t cl_ch_len = get_cluster_chain_length(fs, pi_dirent->cluster_id);
+  uint32_t num_clusters = get_cluster_chain_length(fs, file_match->cluster_id);
+  if (num_clusters == 0) {
+    // no data to display
+  }
 
   // TODO: allocate a buffer large enough to hold the whole file
-  uint32_t num_bytes = pi_dirent->nbytes;
-
-  uint8_t *buf = kmalloc(cl_ch_len * 512 * fs->sectors_per_cluster); // * num_bytes * 512 / fs->sectors_per_cluster);
+  void *file_buffer;
 
   // TODO: read in the whole file (if it's not empty)
-  read_cluster_chain(fs, pi_dirent->cluster_id, buf);
+  if (file_match->nbytes > 0) {
+    // read in file
+    file_buffer = kmalloc(num_clusters * fs->sectors_per_cluster * boot_sector.bytes_per_sec);
+    read_cluster_chain(fs, file_match->cluster_id, file_buffer);
+
+  }
 
   // TODO: fill the pi_file_t
   pi_file_t *file = kmalloc(sizeof(pi_file_t));
   *file = (pi_file_t) {
-    .data = buf,  // aditi edit!
-    .n_data = num_bytes,
-    .n_alloc = cl_ch_len * 512 * fs->sectors_per_cluster,
+    .data = file_buffer,
+    .n_data = file_match->nbytes,
+    .n_alloc = num_clusters * fs->sectors_per_cluster * boot_sector.bytes_per_sec,
   };
   return file;
 }
