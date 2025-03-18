@@ -72,6 +72,13 @@ void show_files(pi_directory_t files) {
                 top_index--;
             delay_ms(500);
         }
+
+        if (!gpio_read(input_right)) {
+            printk("opening file");
+            // TODO: Suze writes this
+        }
+
+
         // input_right currently doesn't do anything
         bot_index = min(top_index + num_entries_to_show, num_entries_in_dir - 1);
 
@@ -170,7 +177,4 @@ void notmain(void) {
     display_clear();
     display_write(10, 20, "Returned from show_files", WHITE, BLACK, 1);
     display_update();
-
-
-
 }
