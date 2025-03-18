@@ -63,7 +63,7 @@ void show_files(pi_directory_t files) {
         }
 
         if (!gpio_read(input_bottom)) {
-            if (top_index < num_entries_in_dir - num_entries_to_show)
+            if (top_index < num_entries_in_dir - 1)  // top entry is the one we click into
                 top_index++;
             delay_ms(500);
         }
