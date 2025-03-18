@@ -19,9 +19,6 @@
 #define input_top 9
 #define input_left 10
 
-// TODO: measure state transition instead of state: checks whether it went not-pressed to pressed
-int button_states[5][2] = {{0,0}, {0,0}, {0,0}, {0,0}, {0,0}}; // 0 means not pressed
-
 void test_buttons(void){
     while (1) {
         // read gpio
@@ -47,8 +44,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
       return a;
     }
     return b;
-  }
-
+}
 
 
 void show_files(pi_directory_t files) {
@@ -105,7 +101,7 @@ void show_files(pi_directory_t files) {
         display_write(10, 20, text_to_display, WHITE, BLACK, 1);
         display_update();
 
-        // Add a small delay to prevent button bouncing
+        // Add a small delay to debounce buttons
         delay_ms(100);
     }
     // dirent->name has max 16 bytes
