@@ -1329,7 +1329,7 @@ Disassembly of section .text:
     93ac:	e59f3004 	ldr	r3, [pc, #4]	; 93b8 <i2c_is_initialized+0xc>
     93b0:	e5930000 	ldr	r0, [r3]
     93b4:	e12fff1e 	bx	lr
-    93b8:	0000ae7c 	.word	0x0000ae7c
+    93b8:	0000aea4 	.word	0x0000aea4
 
 000093bc <i2c_init>:
     93bc:	e92d4010 	push	{r4, lr}
@@ -1368,7 +1368,7 @@ Disassembly of section .text:
     9440:	eb0000d2 	bl	9790 <printk>
     9444:	eb0001da 	bl	9bb4 <clean_reboot>
     9448:	20804000 	.word	0x20804000
-    944c:	0000ae7c 	.word	0x0000ae7c
+    944c:	0000aea4 	.word	0x0000aea4
     9450:	0000a338 	.word	0x0000a338
     9454:	000001ae 	.word	0x000001ae
     9458:	0000a490 	.word	0x0000a490
@@ -1890,7 +1890,7 @@ Disassembly of section .text:
 00009bd4 <program_end>:
     9bd4:	e59f0000 	ldr	r0, [pc]	; 9bdc <program_end+0x8>
     9bd8:	e12fff1e 	bx	lr
-    9bdc:	0000ae80 	.word	0x0000ae80
+    9bdc:	0000aea8 	.word	0x0000aea8
 
 00009be0 <_cstart>:
     9be0:	e92d4030 	push	{r4, r5, lr}
@@ -1936,7 +1936,7 @@ Disassembly of section .text:
     9c80:	ebfffec2 	bl	9790 <printk>
     9c84:	ebffffca 	bl	9bb4 <clean_reboot>
     9c88:	0000a678 	.word	0x0000a678
-    9c8c:	0000ae80 	.word	0x0000ae80
+    9c8c:	0000aea8 	.word	0x0000aea8
     9c90:	0000a5cc 	.word	0x0000a5cc
     9c94:	0000a664 	.word	0x0000a664
     9c98:	0000a5f8 	.word	0x0000a5f8
