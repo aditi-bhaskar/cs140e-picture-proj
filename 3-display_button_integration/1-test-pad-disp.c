@@ -2,7 +2,7 @@
 #include "display.c"
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
-// suze wire colors: TODO
+// suze wire colors: 6: blue, 7: purple, 8: orange, 9: green, 10: yellow
 
 #define BUTTON_SINGLE   's'
 #define BUTTON_TOP      't'
@@ -11,11 +11,11 @@
 #define BUTTON_BOTTOM   'b'
 #define BUTTON_NONE     'n'
 
-#define input_single 6  
-#define input_right 7
-#define input_bottom 8
-#define input_top 9
-#define input_left 10
+#define input_single 6
+#define input_right 7 
+#define input_bottom 8 
+#define input_top 9 
+#define input_left 10 
 
 
 // TODO: measure state transition instead of state: checks whether it went not-pressed to pressed
