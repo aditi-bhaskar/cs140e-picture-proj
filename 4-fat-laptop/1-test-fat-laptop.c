@@ -169,6 +169,7 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
 }
 
+<<<<<<< HEAD
 void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
     uint32_t num_entries_to_show = 4; // show 4 files at a time
     pi_directory_t files = fat32_readdir(fs, directory);
@@ -187,6 +188,28 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
     uint32_t selected_index = 0; // Currently selected file index
     
     char text_to_display[18 * num_entries_to_show + 1]; // file name can be max 16 bytes long + 2 for enter, 1 at the end for null terminator
+=======
+        if (!gpio_read(input_bottom)) {
+            if (top_index < num_entries_in_dir - 1)  // top entry is the one we click into
+                top_index++;
+            delay_ms(500);
+        }
+        if (!gpio_read(input_top)) {
+            if (top_index > 0)
+                top_index--;
+            delay_ms(500);
+        }
+
+        if (!gpio_read(input_right)) {
+            printk("opening file");
+            // TODO: Suze writes this
+        }
+
+
+        // input_right currently doesn't do anything
+        bot_index = min(top_index + num_entries_to_show, num_entries_in_dir - 1);
+
+>>>>>>> 7fa6f53a5f78c6adf45a8d969fa5a7257defbc68
         
     while(1) {
         // Build the display text properly

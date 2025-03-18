@@ -295,7 +295,7 @@ pi_file_t *fat32_read(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
   }
 
   // TODO: allocate a buffer large enough to hold the whole file
-  void *file_buffer;
+  void *file_buffer = NULL;
 
   // TODO: read in the whole file (if it's not empty)
   if (file_match->nbytes > 0) {
