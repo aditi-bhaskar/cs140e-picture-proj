@@ -1,7 +1,5 @@
 // TODO 
-// create file
-// add to file (append)
-// remove files
+// remove files / more on menu
 
 
 #include "rpi.h" // automatically includes gpio, fat32 stuff
@@ -144,7 +142,7 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
             break;
         }
 
-        // TODO display this stuff on screen
+        // TODO display this stuff on screen ??
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
