@@ -269,12 +269,16 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
             }
             
             if (dirent->is_dir_p && text_pos < sizeof(text_to_display) - 2) {
-                // Shift the content right by one character to make room for '/'
-                for (int i = text_pos; i > 0; i--) {
-                    text_to_display[i] = text_to_display[i-1];
+                // Find the start position of the current filename
+                int start_pos = text_pos - j;  // j holds the length of the filename
+                
+                // Shift the filename right by one character to make room for '/'
+                for (int k = text_pos; k > start_pos; k--) {
+                    text_to_display[k] = text_to_display[k-1];
                 }
-                // Add '/' at the beginning
-                text_to_display[0] = '/';
+                
+                // Add '/' at the beginning of the filename
+                text_to_display[start_pos] = '/';
                 text_pos++; // Increment position counter for the added character
             }
             
@@ -309,7 +313,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
         
         if (!gpio_read(input_bottom)) {
             // Move selection down
-            if (selected_index < num_entries_in_dir) {
+            if (selected_index < num_entries_in_dir - 1) {  // Changed from num_entries_in_dir to num_entries_in_dir - 1
                 selected_index++;
                 // If selection moves below visible area, scroll down
                 if (selected_index > bot_index) {
@@ -359,12 +363,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
             
         }
     }
-}
-
-void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
-
-     // TODO
-
 }
 
 void notmain(void) {
