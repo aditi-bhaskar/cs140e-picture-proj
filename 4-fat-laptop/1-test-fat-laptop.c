@@ -1,3 +1,9 @@
+// TODO 
+// create file
+// add to file (append)
+// remove files
+
+
 #include "rpi.h" // automatically includes gpio, fat32 stuff
 #include "display.c"
 #include "pi-sd.h"
@@ -50,33 +56,113 @@ static uint32_t min(uint32_t a, uint32_t b) {
     return b;
 }
 
-void create_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_directory_t files) {
+
+//******************************************
+
+// FUNCTION HEADERS!!
+
+//******************************************
+
+void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
+
+
+
+
+
+//******************************************
+
+// FUNCTIONS!!
+
+//******************************************
+
+
+
+void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
+
+
+
+    pi_directory_t files = fat32_readdir(fs, directory);
+
+    printk("Got %d files.\n", files.ndirents);
+
+    for (int i = 0; i < files.ndirents; i++) {
+
+      pi_dirent_t *dirent = &files.dirents[i];
+
+      if (dirent->is_dir_p) {
+
+        printk("\tD: %s (cluster %d)\n", dirent->name, dirent->cluster_id);
+
+      } else {
+
+        printk("\tF: %s (cluster %d; %d bytes)\n", dirent->name, dirent->cluster_id, dirent->nbytes);
+
+      }
+
+    }
+
+
+
+}
+
+
+
+void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     // create a file; name it a random number like demo_{num}
-    char filename[7] = {'d','e','m','o','_',unique_file_id,'\0'};
+    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     unique_file_id++;
+
+    ls(fs, directory);
 
     pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
 
     while(1) {
+        printk("in create_file, waiting\n");
+        display_clear();
+        // Display navigation hints
+        display_write(0, SSD1306_HEIGHT - 16, "^v<> : write to file", WHITE, BLACK, 1);
+        display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
+        display_update();
+
+        // exit file writing
         if (!gpio_read(input_single)) {
-            // save file & return
-            printk("broke out of create_file");
+            // exit file creation return
+            printk("broke out of create_file\n");
             break;
         }
 
-        pi_file_t *file = fat32_read(fs, directory, filename);
-
         // these buttons write to file
         if (!gpio_read(input_left)) {
-            // write : "prefetch flush* "
-            char *words = "*prefetch flush* ";
-            (file->data[file->n_data]) = *words;
-            // file->n_data += words.size(); // TODO DO SOMETHING LIKE THIS
-            int writ = fat32_write(fs, files.dirents, filename, file);
-            printk("wrote prefetch flush to file \n");
+            printk("Reading file\n");
+            // pi_file_t *file = fat32_read(fs, directory, filename);
+
+            printk("writing to display\n");
+
+            display_clear();
+            display_write(10,10,"writing file!", WHITE, BLACK, 1);
+            display_update();
+
+            // write : "prefetch flush* " to the file
+            char *data = "*prefetch flush*\n";
+            pi_file_t new_file_contents = (pi_file_t) {
+              .data = data, // should technically be appending to the old file's txt. do this next
+              .n_data = strlen(data),
+              .n_alloc = strlen(data),
+            };
+
+            printk("writing to fat\n");
+
+            int writ = fat32_write(fs, directory, filename, &new_file_contents);
+            printk("wrote *prefetch flush* to file: %s\n", filename);
             // TODO display this stuff on screen
-            delay_ms(400);
+
+            // DO LS
+            ls(fs, directory);
+
+            delay_ms(2000);
+            // break;
+
         }
         if (!gpio_read(input_bottom)) {
             // write : "MORE PIZZA "
@@ -90,8 +176,51 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_directory_t files) {
             // write : "minor "
             delay_ms(400);
         }
+        delay_ms(200);
+
     }
 }
+
+
+
+void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
+
+    printk(" in show menu! \n\n");
+    delay_ms(400);
+
+    while(1) {
+
+        display_clear();
+        // write (c) on top right for create
+        display_draw_char(128 - (6 * 3), 10, '(', WHITE, BLACK, 1);
+        display_draw_char(128 - (6 * 2), 10, 'c', WHITE, BLACK, 1);
+        display_draw_char(128 - (6 * 1), 10, ')', WHITE, BLACK, 1);
+
+        display_write(10, 2, "menu\n>: select, \n*: exit", WHITE, BLACK, 1);
+        display_update();
+
+        
+
+        if (!gpio_read(input_right)) {
+            // call create-file
+            create_file(fs, directory);
+            delay_ms(200);
+            return;
+        }
+
+        if (!gpio_read(input_single)) {
+            // close menu
+            display_clear();
+            display_update();
+            show_files(fs, directory);
+        }
+
+        // TODO implm up/down arrows to select other menu options; highlight them
+    }
+
+}
+
+
 
 void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
     trace("about to display file %s\n", file_dirent->name);
@@ -408,18 +537,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
             delay_ms(200); // Prevent rapid scrolling
         }
-        else if (!gpio_read(input_top)) {
-            // Move selection up
-            if (selected_index > 0) {
-                selected_index--;
-                
-                // Scroll if selection goes above visible area
-                if (selected_index < top_index) {
-                    top_index--;
-                }
-            }
-            delay_ms(200); // Prevent rapid scrolling
-        }
         else if (!gpio_read(input_right)) {
             // Convert selected_index to real index
             int real_selected_index = 0;
@@ -467,15 +584,27 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
             delay_ms(200); // Debounce
         }
+        else if (!gpio_read(input_top)) { // for aditi hardware
+            // Move selection up
+            if (selected_index > 0) {
+                selected_index--;
+                
+                // Scroll if selection goes above visible area
+                if (selected_index < top_index) {
+                    top_index--;
+                }
+            }
+            delay_ms(200); // Prevent rapid scrolling
+        }
         else if (!gpio_read(input_single)) {
             // TODO: ADITI IS THIS WHAT SINGLE SHOULD DO???
-            // Create a new file in current directory
-            display_clear();
-            display_write(5, 20, "Creating new file... (not implemented)", WHITE, BLACK, 1);
-            display_update();
-            delay_ms(500);
-            
-            //create_file(fs, &current_dir.entry, files);
+
+            show_menu(fs, &current_dir.entry);
+                // Create a new file in current directory
+            // display_clear();
+            // display_write(5, 20, "Creating new file... (not implemented)", WHITE, BLACK, 1);
+            // display_update();
+            // delay_ms(500);
             
             delay_ms(200); // Debounce
         }
