@@ -470,18 +470,18 @@ int fat32_rename(fat32_fs_t *fs, pi_dirent_t *directory, char *oldname, char *ne
 pi_dirent_t *fat32_create(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, int is_dir) {
   demand(init_p, "fat32 not initialized!");
   if (trace_p) trace("creating %s\n", filename);
-  if (!fat32_is_valid_name(filename)) return NULL;
+  if (!fat32_is_valid_name(filename)) {printk("invalid fat32 file name!"); return NULL;} // NOTE: can't add _ in file name
 
   // TODO: read the dirents and make sure there isn't already a file with the
   // same name
 
   // check that the directory is actually a directory 
-  if (!directory->is_dir_p) {printk("directory is not a dir NOT FOUND!"); return NULL;}
+  if (!directory->is_dir_p) {printk("directory is not a dir NOT FOUND!\n"); return NULL;}
 
   uint32_t dir_n = 0;
   fat32_dirent_t *fat_dirents = get_dirents(fs, directory->cluster_id, &dir_n);
   int dirent_with_name = find_dirent_with_name(fat_dirents, dir_n, filename);
-  if (dirent_with_name != -1) {printk("dirent_with_name already exists!"); return NULL;}
+  if (dirent_with_name != -1) {printk("dirent_with_name already exists!\n"); return NULL;}
 
   // TODO: look for a free directory entry and use it to store the data for the
   // new file.  If there aren't any free directory entries, either panic or
@@ -506,14 +506,22 @@ pi_dirent_t *fat32_create(fat32_fs_t *fs, pi_dirent_t *directory, char *filename
       break;
     }
   }
+
   if (dir_found == -1) {panic("dir_found NOT FOUND!");}
 
   // TODO: write out the updated directory to the disk
   // joe comment: [do the math] figure out sector num i of entry, and divide by number of sectors in cluster. then jst write back that specific cluster
   // figure out which sector and just write that one back
   write_fat_to_disk(fs);
+
   write_cluster_chain(fs, directory->cluster_id, (uint8_t *)fat_dirents, dir_n * sizeof(fat32_dirent_t));
 
+
+  // fat32_dirent_t *dir_check = get_dirents(fs, directory->cluster_id, &dir_n);
+  // printk(">>>>Debug: Checking directory after writing, found entries=%d\n", dir_n);
+  // for (int i = 0; i < dir_n; i++) {
+  //     printk("    Entry %d: %s\n", i, dir_check[i].filename);
+  // }
   // TODO: convert the dirent to a `pi_dirent_t` and return a (kmalloc'ed) pointer
   // dir_found / [entries in a cluster] = cluster num
   // dir_found % [entries in a sector] = sector num
@@ -606,6 +614,7 @@ int fat32_write(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, pi_file_
   }
   // update the directory entry with the new size
 
+  printk("  in write: updating dir size\n");
   fat32_dirent_t *dirent_to_write = &dirents[dirent_index];
   dirent_to_write->file_nbytes = file->n_data;
   if (dirent_to_write->lo_start == 0 && dirent_to_write->hi_start == 0) {
@@ -615,12 +624,17 @@ int fat32_write(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, pi_file_
     dirent_to_write->hi_start = (new_cluster >> 16) & 0xFFFF;
     fs->fat[new_cluster] = LAST_CLUSTER;
   }
+
+  printk("  in write: cluster chain for file data\n");
   // write out file data
   write_cluster_chain(fs, dirent_to_write->lo_start | (dirent_to_write->hi_start << 16), file->data, file->n_data);
 
+
+  printk("  in write: cluster chain for dir entries\n");
   // write out directory entries
   write_cluster_chain(fs, directory->cluster_id, (uint8_t *)dirents, dir_n * sizeof(fat32_dirent_t));
 
+  printk("  in write: fat to disk\n");
   // write out fat
   write_fat_to_disk(fs);
   return 1;
