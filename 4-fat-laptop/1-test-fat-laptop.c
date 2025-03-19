@@ -320,19 +320,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
             delay_ms(200);
         }
         
-        if (!gpio_read(input_top)) {
-            // Move selection up
-            if (selected_index > 0) {
-                selected_index--;
-                // If selection moves above visible area, scroll up
-                if (selected_index < top_index) {
-                    top_index--;
-                    bot_index = min(top_index + num_entries_to_show - 1, num_entries_in_dir - 1);
-                }
-            }
-            delay_ms(200);
-        }
-        
         if (!gpio_read(input_right)) {
             // Open selected file or directory
             pi_dirent_t *selected_dirent = &files.dirents[selected_index];
@@ -349,6 +336,20 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
             } else {
                 // If it's a file, display its contents
                 display_file(fs, directory, selected_dirent);
+            }
+            delay_ms(200);
+        }
+
+        if (!gpio_read(input_top)) {
+            printk("scrolling up; top pressed");
+            // Move selection up
+            if (selected_index > 0) {
+                selected_index--;
+                // If selection moves above visible area, scroll up
+                if (selected_index < top_index) {
+                    top_index--;
+                    bot_index = min(top_index + num_entries_to_show - 1, num_entries_in_dir - 1);
+                }
             }
             delay_ms(200);
         }
