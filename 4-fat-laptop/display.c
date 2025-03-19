@@ -351,3 +351,144 @@ void display_invert(uint8_t invert) {
 }
 
 
+// PBM stuff
+/**
+ * Check if a file is a PBM file based on its extension
+ */
+int is_pbm_file(const char *filename) {
+    // Get the length of the filename
+    int len = strlen(filename);
+    
+    // Check if it ends with .PBM or .pbm
+    if (len >= 4) { // lowercase should never happen but can't hurt to check
+        if ((filename[len-4] == '.' && 
+             (filename[len-3] == 'P' || filename[len-3] == 'p') &&
+             (filename[len-2] == 'B' || filename[len-2] == 'b') &&
+             (filename[len-1] == 'M' || filename[len-1] == 'm'))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Parse and display a PBM file
+ * Supports both P1 (ASCII) and P4 (binary) formats
+ */
+void display_draw_pbm(const uint8_t *pbm_data, uint16_t size) {
+    // Clear the display first
+    display_clear();
+    
+    // Check if we have valid data
+    if (!pbm_data || size < 10) {
+        display_write(10, 20, "Invalid PBM file", WHITE, BLACK, 1);
+        display_update();
+        return;
+    }
+    
+    // Check for PBM magic number
+    if (pbm_data[0] != 'P' || (pbm_data[1] != '1' && pbm_data[1] != '4')) {
+        display_write(10, 20, "Not a PBM file", WHITE, BLACK, 1);
+        display_update();
+        return;
+    }
+    
+    // PBM format type
+    int binary_format = (pbm_data[1] == '4');
+    
+    // Parse header to get width and height
+    int width = 0, height = 0;
+    int pos = 2;
+    int parsing_width = 1;
+    
+    // Skip any whitespace
+    while (pos < size && (pbm_data[pos] == ' ' || pbm_data[pos] == '\t' || 
+                          pbm_data[pos] == '\n' || pbm_data[pos] == '\r')) {
+        pos++;
+    }
+    
+    // Parse width
+    while (pos < size && pbm_data[pos] >= '0' && pbm_data[pos] <= '9') {
+        width = width * 10 + (pbm_data[pos] - '0');
+        pos++;
+    }
+    
+    // Skip any whitespace
+    while (pos < size && (pbm_data[pos] == ' ' || pbm_data[pos] == '\t' || 
+                          pbm_data[pos] == '\n' || pbm_data[pos] == '\r')) {
+        pos++;
+    }
+    
+    // Parse height
+    while (pos < size && pbm_data[pos] >= '0' && pbm_data[pos] <= '9') {
+        height = height * 10 + (pbm_data[pos] - '0');
+        pos++;
+    }
+    
+    // Skip any whitespace to get to the start of data
+    while (pos < size && (pbm_data[pos] == ' ' || pbm_data[pos] == '\t' || 
+                          pbm_data[pos] == '\n' || pbm_data[pos] == '\r')) {
+        pos++;
+    }
+    
+    // Check if we have valid dimensions
+    if (width <= 0 || height <= 0 || width > SSD1306_WIDTH || height > SSD1306_HEIGHT) {
+        display_write(10, 20, "Invalid PBM size", WHITE, BLACK, 1);
+        display_write(10, 30, "Max: 128x64", WHITE, BLACK, 1);
+        display_update();
+        return;
+    }
+    
+    // Center
+    int x_offset = (SSD1306_WIDTH - width) / 2;
+    int y_offset = (SSD1306_HEIGHT - height) / 2;
+    
+    if (binary_format) {
+        int row_bytes = (width + 7) / 8; 
+        
+        for (int y = 0; y < height; y++) {
+            if (pos + row_bytes > size) break; // Ensure we don't read past the end
+            
+            for (int x = 0; x < width; x++) {
+                int byte_pos = x / 8;
+                int bit_pos = 7 - (x % 8); // MSB first in PBM
+                
+                if (pos + byte_pos < size) {
+                    uint8_t pixel = (pbm_data[pos + byte_pos] >> bit_pos) & 0x01;
+                    // In PBM, 1 is black and 0 is white, but our display uses opposite convention
+                    display_set_pixel(x + x_offset, y + y_offset, pixel ? WHITE : BLACK);
+                }
+            }
+            pos += row_bytes;
+        }
+    } else {
+        // ASCII
+        int x = 0, y = 0;
+        
+        while (pos < size && y < height) {
+            // Skip whitespace
+            while (pos < size && (pbm_data[pos] == ' ' || pbm_data[pos] == '\t' || 
+                                  pbm_data[pos] == '\n' || pbm_data[pos] == '\r')) {
+                pos++;
+            }
+            
+            if (pos < size) {
+                if (pbm_data[pos] == '0' || pbm_data[pos] == '1') {
+                    // In PBM, 1 is black and 0 is white, but our display uses opposite convention
+                    uint8_t pixel = (pbm_data[pos] == '1') ? WHITE : BLACK;
+                    display_set_pixel(x + x_offset, y + y_offset, pixel);
+                    
+                    x++;
+                    if (x >= width) {
+                        x = 0;
+                        y++;
+                    }
+                }
+                pos++;
+            }
+        }
+    }
+    
+    // Update the display with the rendered image
+    display_update();
+}

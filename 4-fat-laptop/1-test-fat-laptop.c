@@ -221,118 +221,166 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
     trace("finished reading file\n", file_dirent->name);
 
-    // Variables for scrolling through file
-    int start_line = 0;
-    int lines_per_screen = 10;      // Show 10 lines on screen
-    int max_lines = file->n_data;   // Maximum number of lines to scroll through
-
-    // Buffer to hold the portion of text to display
-    char display_buffer[512]; // Large enough for the visible portion
-
-    while(1) {
-        // Format text for display
-        display_buffer[0] = '\0';
-        int buf_pos = 0;
-        int line_count = 0;
-        
-        // Calculate the actual position in the file to start from
-        int file_pos = 0;
-        int current_line = 0;
-        
-        // Skip to starting line
-        while (current_line < start_line && file_pos < file->n_data) {
-            if (file->data[file_pos] == '\n') {
-                current_line++;
-            }
-            file_pos++;
-        }
-        
-        // Now read lines from the calculated position
-        for (int i = file_pos; i < file->n_data && line_count < lines_per_screen; i++) {
-            char c = file->data[i];
-            
-            // Add character to buffer
-            if (c == '\r') continue; // Skip carriage returns
-            
-            display_buffer[buf_pos++] = c;
-            
-            // Ensure null termination
-            display_buffer[buf_pos] = '\0';
-            
-            // Count lines
-            if (c == '\n') {
-                line_count++;
-            }
-            
-            // Check if we've completed all lines
-            if (line_count >= lines_per_screen) break;
-        }
-
-        // Display the text
-        display_clear();
+    // Check if this is a PBM file
+    if (is_pbm_file(file_dirent->name)) {
+        // Display PBM image
+        trace("trying to display PBM\n");
+        display_draw_pbm((uint8_t*)file->data, file->n_data);
         
         // Show file name at the top
         display_write(10, 0, file_dirent->name, WHITE, BLACK, 1);
         display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
         
-        // Show the file content
-        display_write(0, 12, display_buffer, WHITE, BLACK, 1);
-        
-        // Add scroll indicators if needed
-        if (start_line > 0) {
-            display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
-        }
-        
-        // Estimate if there's more content below
-        if (file_pos + strlen(display_buffer) < file->n_data) {
-            display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
-        }
-        
-        // Add navigation help at bottom
-        display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
-        
+        // Show navigation help
+        display_write(0, SSD1306_HEIGHT - 8, "<:Back", WHITE, BLACK, 1);
         display_update();
-        trace("contents of display buffer: %s", display_buffer);
+        
+        // Wait for button inputs in a loop specific to image viewing
+        while(1) {
+            // Wait for a button press
+            while(gpio_read(input_left) && gpio_read(input_right) && 
+                  gpio_read(input_top) && gpio_read(input_bottom) && 
+                  gpio_read(input_single)) {
+                delay_ms(50);
+            }
+            
+            // Check if back button was pressed
+            if (!gpio_read(input_left)) {
+                // Exit file view 
+                delay_ms(200); // Debounce
+                return;
+            }
+            
+            // Add additional image navigation controls here if needed
+            // For example: zoom in/out, pan, etc.
+            
+            // Wait for button release
+            while(!gpio_read(input_left) || !gpio_read(input_right) || 
+                  !gpio_read(input_top) || !gpio_read(input_bottom) || 
+                  !gpio_read(input_single)) {
+                delay_ms(50);
+            }
+        }
+    }
+    else {
+        // For text files, proceed with regular text viewing...
+        
+        // Variables for scrolling through file
+        int start_line = 0;
+        int lines_per_screen = 10;      // Show 10 lines on screen
+        int max_lines = file->n_data;   // Maximum number of lines to scroll through
 
-        while(gpio_read(input_left) && gpio_read(input_right) && 
-              gpio_read(input_top) && gpio_read(input_bottom) && 
-              gpio_read(input_single)) {
-            // Just wait for a button press
-            delay_ms(50);
-        }
-        
-        // Check for button presses and scroll accordingly
-        if (!gpio_read(input_left)) {
-            // Exit file view immediately
-            return;
-        }
-        
-        if (!gpio_read(input_top) && start_line > 0) {
-            // Scroll up one line at a time
-            start_line--;
-            delay_ms(200);
-        }
-        
-        if (!gpio_read(input_bottom) && file_pos + strlen(display_buffer) < file->n_data) {
-            // Scroll down one line at a time
-            start_line++;
-            delay_ms(200);
-        }
-        
-        if (!gpio_read(input_right) && file_pos + strlen(display_buffer) < file->n_data) {
-            // Also scroll down one line at a time
-            start_line++;
-            delay_ms(200);
-        }
-        
-        // Wait for button release
-        while(!gpio_read(input_left) || !gpio_read(input_right) || 
-              !gpio_read(input_top) || !gpio_read(input_bottom) || 
-              !gpio_read(input_single)) {
-            delay_ms(50);
+        // Buffer to hold the portion of text to display
+        char display_buffer[512]; // Large enough for the visible portion
+
+        while(1) {
+            // Format text for display
+            display_buffer[0] = '\0';
+            int buf_pos = 0;
+            int line_count = 0;
+            
+            // Calculate the actual position in the file to start from
+            int file_pos = 0;
+            int current_line = 0;
+            
+            // Skip to starting line
+            while (current_line < start_line && file_pos < file->n_data) {
+                if (file->data[file_pos] == '\n') {
+                    current_line++;
+                }
+                file_pos++;
+            }
+            
+            // Now read lines from the calculated position
+            for (int i = file_pos; i < file->n_data && line_count < lines_per_screen; i++) {
+                char c = file->data[i];
+                
+                // Add character to buffer
+                if (c == '\r') continue; // Skip carriage returns
+                
+                display_buffer[buf_pos++] = c;
+                
+                // Ensure null termination
+                display_buffer[buf_pos] = '\0';
+                
+                // Count lines
+                if (c == '\n') {
+                    line_count++;
+                }
+                
+                // Check if we've completed all lines
+                if (line_count >= lines_per_screen) break;
+            }
+
+            // Display the text
+            display_clear();
+            
+            // Show file name at the top
+            display_write(10, 0, file_dirent->name, WHITE, BLACK, 1);
+            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+            
+            // Show the file content
+            display_write(0, 12, display_buffer, WHITE, BLACK, 1);
+            
+            // Add scroll indicators if needed
+            if (start_line > 0) {
+                display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
+            }
+            
+            // Estimate if there's more content below
+            if (file_pos + strlen(display_buffer) < file->n_data) {
+                display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
+            }
+            
+            // Add navigation help at bottom
+            display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
+            
+            display_update();
+            trace("contents of display buffer: %s", display_buffer);
+
+            while(gpio_read(input_left) && gpio_read(input_right) && 
+                  gpio_read(input_top) && gpio_read(input_bottom) && 
+                  gpio_read(input_single)) {
+                // Just wait for a button press
+                delay_ms(50);
+            }
+            
+            // Check for button presses and scroll accordingly
+            if (!gpio_read(input_left)) {
+                // Exit file view immediately
+                return;
+            }
+            
+            if (!gpio_read(input_top) && start_line > 0) {
+                // Scroll up one line at a time
+                start_line--;
+                delay_ms(200);
+            }
+            
+            if (!gpio_read(input_bottom) && file_pos + strlen(display_buffer) < file->n_data) {
+                // Scroll down one line at a time
+                start_line++;
+                delay_ms(200);
+            }
+             
+            if (!gpio_read(input_right) && file_pos + strlen(display_buffer) < file->n_data) {
+                // Also scroll down one line at a time
+                start_line++;
+                delay_ms(200);
+            }
+            
+            // Wait for button release
+            while(!gpio_read(input_left) || !gpio_read(input_right) || 
+                  !gpio_read(input_top) || !gpio_read(input_bottom) || 
+                  !gpio_read(input_single)) {
+                delay_ms(50);
+            }
         }
     }
 }
+
+
+
 
 // Extended directory entry with parent pointer for navigation; funky but okay
 typedef struct {

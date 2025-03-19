@@ -54,4 +54,9 @@ void display_write(int16_t x, int16_t y, const char *text, uint8_t color, uint8_
 void display_invert(uint8_t invert);
 void display_command(uint8_t cmd);
 
+
+// PBM (=image) stuff
+void display_draw_pbm(const uint8_t *pbm_data, uint16_t size);
+int is_pbm_file(const char *filename);
+
 #endif // __DISPLAY_H__
