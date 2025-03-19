@@ -83,6 +83,38 @@ void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
 }
 
 
+void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
+    display_clear();
+    display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
+    display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
+    display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
+    display_update();
+    
+    printk("Reading file\n");
+    pi_file_t *file = fat32_read(fs, directory, filename);
+    char *data_old = file->data;
+
+    // write : "append me" to the file
+    char data[strlen(data_old) + strlen(append_me)+ 1];
+    strcpy(data, data_old);   // Copy old data
+    strcat(data, append_me);  // Append new data
+    printk("data contents = %s\n\n", data);
+
+    pi_file_t new_file_contents = (pi_file_t) {
+        .data = data, // should technically be appending to the old file's txt. do this next
+        .n_data = strlen(data),
+        .n_alloc = strlen(data),
+    };
+
+    printk("writing to fat\n");
+
+    int writ = fat32_write(fs, directory, filename, &new_file_contents);
+    printk("wrote *prefetch flush* to file: %s\n", filename);
+    
+    delay_ms(1000);
+
+}
+
 void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     // create a file; name it a random number like demo_{num}
@@ -91,13 +123,16 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     ls(fs, directory);
 
+    // doesn't create file if file alr exists
     pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+    
+    delay_ms(200);
 
     while(1) {
         printk("in create_file, waiting\n");
         display_clear();
         // Display navigation hints
-        display_write(0, SSD1306_HEIGHT - 16, "^v<> : write to file", WHITE, BLACK, 1);
+        display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
         display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
         display_update();
 
@@ -105,53 +140,22 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
         if (!gpio_read(input_single)) {
             // exit file creation return
             printk("broke out of create_file\n");
+            delay_ms(200);
             break;
         }
 
+        // TODO display this stuff on screen
+
         // these buttons write to file
         if (!gpio_read(input_left)) {
-            printk("Reading file\n");
-            // pi_file_t *file = fat32_read(fs, directory, filename);
-
-            printk("writing to display\n");
-
-            display_clear();
-            display_write(10,10,"writing file!", WHITE, BLACK, 1);
-            display_update();
-
-            // write : "prefetch flush* " to the file
-            char *data = "*prefetch flush*\n";
-            pi_file_t new_file_contents = (pi_file_t) {
-              .data = data, // should technically be appending to the old file's txt. do this next
-              .n_data = strlen(data),
-              .n_alloc = strlen(data),
-            };
-
-            printk("writing to fat\n");
-
-            int writ = fat32_write(fs, directory, filename, &new_file_contents);
-            printk("wrote *prefetch flush* to file: %s\n", filename);
-            // TODO display this stuff on screen
-
-            // DO LS
-            ls(fs, directory);
-
-            delay_ms(2000);
-            // break;
-
-        }
-        if (!gpio_read(input_bottom)) {
-            // write : "MORE PIZZA "
-            delay_ms(400);
-        }
-        if (!gpio_read(input_top)) {
-            // write : "Dawson "
-            delay_ms(400);
-        }
-        if (!gpio_read(input_right)) {
-            // write : "minor "
-            delay_ms(400);
-        }
+            append_to_file(fs, directory, filename, "*prefetch flush* ");
+        } if (!gpio_read(input_bottom)) {
+            append_to_file(fs, directory, filename, "MORE PIZZA ");
+        } if (!gpio_read(input_right)) {
+            append_to_file(fs, directory, filename, "minor ");
+        } if (!gpio_read(input_top)) {
+            append_to_file(fs, directory, filename, "Dawson!! ");
+        } 
         delay_ms(200);
 
     }

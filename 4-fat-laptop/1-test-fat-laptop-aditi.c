@@ -107,17 +107,23 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
-            printk("Reading file\n");
-            // pi_file_t *file = fat32_read(fs, directory, filename);
-
-            printk("writing to display\n");
 
             display_clear();
-            display_write(10,10,"writing file!", WHITE, BLACK, 1);
+            display_write(10,10,"Appending to file!", WHITE, BLACK, 1);
             display_update();
+            
+            printk("Reading file\n");
+            pi_file_t *file = fat32_read(fs, directory, filename);
+            char *data_old = file->data;
 
             // write : "prefetch flush* " to the file
-            char *data = "*prefetch flush*\n";
+            char *append_me = "*prefetch flush*\n";
+            char data[strlen(data_old) + strlen(append_me)+ 1];
+            strcpy(data, data_old);   // Copy old data
+            strcat(data, append_me);  // Append new data
+            printk("data contents = %s\n\n", data);
+
+
             pi_file_t new_file_contents = (pi_file_t) {
               .data = data, // should technically be appending to the old file's txt. do this next
               .n_data = strlen(data),
