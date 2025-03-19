@@ -12,3 +12,4 @@ staff
 *.o
 *.bin
 *.d
+*.list
