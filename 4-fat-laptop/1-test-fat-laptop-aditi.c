@@ -1,3 +1,8 @@
+// TODO 
+// create file
+// add to file (append)
+// remove files
+
 #include "rpi.h" // automatically includes gpio, fat32 stuff
 #include "display.c"
 #include "pi-sd.h"
@@ -59,53 +64,78 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
 // FUNCTIONS!!
 //******************************************
 
+void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
+
+    pi_directory_t files = fat32_readdir(fs, directory);
+    printk("Got %d files.\n", files.ndirents);
+    for (int i = 0; i < files.ndirents; i++) {
+      pi_dirent_t *dirent = &files.dirents[i];
+      if (dirent->is_dir_p) {
+        printk("\tD: %s (cluster %d)\n", dirent->name, dirent->cluster_id);
+      } else {
+        printk("\tF: %s (cluster %d; %d bytes)\n", dirent->name, dirent->cluster_id, dirent->nbytes);
+      }
+    }
+
+}
+
+
 void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     // create a file; name it a random number like demo_{num}
-    char filename[7] = {'D','E','M','O','_',unique_file_id,'\0'};
+    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     unique_file_id++;
 
-    pi_dirent_t *created_file = fat32_create(fs, directory, filename, 1); // 0=not a directory
+    ls(fs, directory);
+
+    pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
 
     while(1) {
+        printk("in create_file, waiting\n");
+        display_clear();
+        // Display navigation hints
+        display_write(0, SSD1306_HEIGHT - 16, "^v<> : write to file", WHITE, BLACK, 1);
+        display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
+        display_update();
+
+        // exit file writing
         if (!gpio_read(input_single)) {
             // exit file creation return
             printk("broke out of create_file\n");
             break;
         }
 
-        printk("in create_file, waiting\n");
-        display_clear();
-        // Display navigation hints
-        display_write(0, SSD1306_HEIGHT - 8, "^v<> : write to file!", WHITE, BLACK, 1);
-        display_update();
-
         // these buttons write to file
         if (!gpio_read(input_left)) {
-            pi_file_t *file = fat32_read(fs, directory, filename);
+            printk("Reading file\n");
+            // pi_file_t *file = fat32_read(fs, directory, filename);
+
+            printk("writing to display\n");
 
             display_clear();
-            char *text = "writing file!";
-            display_write(10,10,text,0b01110111, 0, 1);
+            display_write(10,10,"writing file!", WHITE, BLACK, 1);
             display_update();
 
             // write : "prefetch flush* " to the file
             char *data = "*prefetch flush*\n";
-            pi_file_t new_file = (pi_file_t) {
+            pi_file_t new_file_contents = (pi_file_t) {
               .data = data, // should technically be appending to the old file's txt. do this next
               .n_data = strlen(data),
               .n_alloc = strlen(data),
             };
 
-            printk("new file is called: ");
-            printk(created_file->name);
-            printk("\n");
+            printk("writing to fat\n");
 
-            int writ = fat32_write(fs, directory, created_file->name, &new_file);
-            printk("wrote prefetch flush to file \n");
+            int writ = fat32_write(fs, directory, filename, &new_file_contents);
+            printk("wrote *prefetch flush* to file: %s\n", filename);
             // TODO display this stuff on screen
-            delay_ms(5000);
+
+            // DO LS
+            ls(fs, directory);
+
+            delay_ms(2000);
             // break;
+
         }
         if (!gpio_read(input_bottom)) {
             // write : "MORE PIZZA "
