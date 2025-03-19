@@ -91,7 +91,6 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_directory_t files) {
             delay_ms(400);
         }
     }
-
 }
 
 void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
@@ -221,6 +220,18 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
     uint32_t num_entries_to_show = 4; // show 4 files at a time
     pi_directory_t files = fat32_readdir(fs, directory);
     unsigned num_entries_in_dir = files.ndirents;
+
+    printk("Got %d files.\n", files.ndirents);
+    for (int i = 0; i < files.ndirents; i++) {
+        pi_dirent_t *dirent = &files.dirents[i];
+        if (dirent->is_dir_p) {
+        printk("\tD: %s (cluster %d)\n", dirent->name, dirent->cluster_id);
+        } else {
+        printk("\tF: %s (cluster %d; %d bytes)\n", dirent->name, dirent->cluster_id, dirent->nbytes);
+        }
+    }
+
+
     
     if (num_entries_in_dir == 0) {
         display_clear();
@@ -298,7 +309,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
         
         if (!gpio_read(input_bottom)) {
             // Move selection down
-            if (selected_index < num_entries_in_dir - num_entries_to_show) {
+            if (selected_index < num_entries_in_dir) {
                 selected_index++;
                 // If selection moves below visible area, scroll down
                 if (selected_index > bot_index) {
