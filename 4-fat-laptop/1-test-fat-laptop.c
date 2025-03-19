@@ -216,17 +216,22 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
 }
 
+// Extended directory entry with parent pointer for navigation; funky but okay
+typedef struct {
+    pi_dirent_t entry;         // The actual directory entry
+    void* parent;              // Pointer to parent directory entry
+} ext_dirent_t;
+
+// Then, update the show_files function to use this extended structure:
+
 void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Constants for navigation
     const uint32_t NUM_ENTRIES_TO_SHOW = 4; // Show 4 files at a time on screen
     
-    // Create a copy of the starting directory to keep track of where we are
-    pi_dirent_t current_directory = *starting_directory;
-    
-    // Keep track of parent directory for back navigation
-    // Initialize parent to NULL-like state (at root)
-    pi_dirent_t parent_directory = {0};
-    int at_root = 1;  // Start at root level
+    // Create an extended directory structure to track parents
+    ext_dirent_t current_dir;
+    current_dir.entry = *starting_directory;
+    current_dir.parent = NULL;  // Root has no parent
     
     // Navigation state variables
     uint32_t top_index = 0;      // First visible entry index
@@ -236,7 +241,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Main file browser loop
     while(1) {
         // Read current directory contents
-        pi_directory_t files = fat32_readdir(fs, &current_directory);
+        pi_directory_t files = fat32_readdir(fs, &current_dir.entry);
         uint32_t total_entries = files.ndirents;
 
         printk("Got %d files.\n", files.ndirents);
@@ -337,10 +342,10 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         
         // Prepare directory name display
         char dir_name[22]; // Limit to screen width
-        if (current_directory.name[0] == '\0') {
+        if (current_dir.entry.name[0] == '\0') {
             safe_strcpy(dir_name, "Root Directory", sizeof(dir_name));
         } else {
-            safe_strcpy(dir_name, current_directory.name, sizeof(dir_name));
+            safe_strcpy(dir_name, current_dir.entry.name, sizeof(dir_name));
         }
         
         // Show the current directory at the top
@@ -351,7 +356,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         display_write(0, 12, text_to_display, WHITE, BLACK, 1);
         
         // Show navigation help
-        if (!at_root) {
+        if (current_dir.parent != NULL) {
             display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Back >:Open", WHITE, BLACK, 1);
         } else {
             display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Exit >:Open", WHITE, BLACK, 1);
@@ -370,22 +375,20 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         
         // Handle button input
         if (!gpio_read(input_left)) {
-            // This is the "back" button - navigate to parent directory if not at root
-            if (!at_root) {
+            // This is the "back" button - navigate to parent directory if we have one
+            if (current_dir.parent != NULL) {
                 display_clear();
                 display_write(10, 20, "Going back...", WHITE, BLACK, 1);
                 display_update();
                 delay_ms(200);
                 
+                // We need to cast the parent pointer back to ext_dirent_t*
+                ext_dirent_t* parent_dir = (ext_dirent_t*)current_dir.parent;
+                
                 // Navigate to parent directory
-                current_directory = parent_directory;
+                current_dir = *parent_dir;
                 selected_index = 0;  // Reset selection
                 top_index = 0;       // Reset view position
-                
-                // Check if we've reached the root
-                if (parent_directory.cluster_id == 0 || parent_directory.name[0] == '\0') {
-                    at_root = 1;
-                }
             } else {
                 // At root, so exit the file browser
                 trace("exiting file system");
@@ -439,9 +442,15 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             
             // Handle selection action based on entry type
             if (selected_dirent->is_dir_p) {
-                // Save current directory as parent before navigating
-                parent_directory = current_directory;
-                at_root = 0;  // No longer at root since we've stored a parent
+                // Create a new extended directory entry with parent pointer
+                ext_dirent_t* new_parent = kmalloc(sizeof(ext_dirent_t));
+                
+                // Copy the current directory to be used as parent
+                *new_parent = current_dir;
+                
+                // Create a new current directory with the selected entry
+                current_dir.entry = *selected_dirent;
+                current_dir.parent = new_parent;
                 
                 // Regular directory - navigate into it
                 display_clear();
@@ -449,30 +458,29 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 display_update();
                 delay_ms(200);
                 
-                current_directory = *selected_dirent;
                 selected_index = 0;  // Reset selection for new directory
                 top_index = 0;       // Reset view position
             } 
             else {
                 // It's a file - display its content
-                display_file(fs, &current_directory, selected_dirent);
+                display_file(fs, &current_dir.entry, selected_dirent);
             }
             delay_ms(200); // Debounce
         }
         else if (!gpio_read(input_single)) {
+            // TODO: ADITI IS THIS WHAT SINGLE SHOULD DO???
             // Create a new file in current directory
             display_clear();
-            display_write(5, 20, "Creating new file...", WHITE, BLACK, 1);
+            display_write(5, 20, "Creating new file... (not implemented)", WHITE, BLACK, 1);
             display_update();
             delay_ms(500);
             
-            create_file(fs, &current_directory, files);
+            //create_file(fs, &current_dir.entry, files);
             
             delay_ms(200); // Debounce
         }
     }
 }
-
 
 
 
