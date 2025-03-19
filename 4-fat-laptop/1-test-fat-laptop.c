@@ -56,55 +56,31 @@ static uint32_t min(uint32_t a, uint32_t b) {
     return b;
 }
 
-
 //******************************************
-
 // FUNCTION HEADERS!!
-
 //******************************************
 
 void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
 
-
-
-
-
 //******************************************
-
 // FUNCTIONS!!
-
 //******************************************
 
 
 
 void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
-
-
-
     pi_directory_t files = fat32_readdir(fs, directory);
-
     printk("Got %d files.\n", files.ndirents);
 
     for (int i = 0; i < files.ndirents; i++) {
-
       pi_dirent_t *dirent = &files.dirents[i];
-
       if (dirent->is_dir_p) {
-
         printk("\tD: %s (cluster %d)\n", dirent->name, dirent->cluster_id);
-
       } else {
-
         printk("\tF: %s (cluster %d; %d bytes)\n", dirent->name, dirent->cluster_id, dirent->nbytes);
-
       }
-
     }
-
-
-
 }
-
 
 
 void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
@@ -199,7 +175,6 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
         display_write(10, 2, "menu\n>: select, \n*: exit", WHITE, BLACK, 1);
         display_update();
 
-        
 
         if (!gpio_read(input_right)) {
             // call create-file
@@ -207,7 +182,6 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
             delay_ms(200);
             return;
         }
-
         if (!gpio_read(input_single)) {
             // close menu
             display_clear();
@@ -219,7 +193,6 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
     }
 
 }
-
 
 
 void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
