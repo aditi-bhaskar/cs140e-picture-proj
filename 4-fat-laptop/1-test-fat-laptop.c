@@ -330,7 +330,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
         }
 
         if (!gpio_read(input_top)) {
-            printk("scrolling up; top pressed");
             // Move selection up
             if (selected_index > 0) {
                 selected_index--;
@@ -342,7 +341,19 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
             }
             delay_ms(200);
         }
+
+
+        if (!gpio_read(input_single)) {
+            // display menu to create file
+            
+        }
     }
+}
+
+void show_files(fat32_fs_t *fs, pi_dirent_t *directory) {
+
+     // TODO
+
 }
 
 void notmain(void) {
