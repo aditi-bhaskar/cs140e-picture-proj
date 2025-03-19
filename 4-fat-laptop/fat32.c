@@ -315,7 +315,6 @@ pi_file_t *fat32_read(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
   return file;
 }
 
-
 /******************************************************************************
  * Everything below here is for writing to the SD card (Part 7/Extension).  If
  * you're working on read-only code, you don't need any of this.
