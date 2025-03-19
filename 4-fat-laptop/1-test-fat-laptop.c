@@ -59,7 +59,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
 //******************************************
 
 void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
-
+void start_screen(void) ;
 //******************************************
 // FUNCTIONS!!
 //******************************************
@@ -124,7 +124,7 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
     // doesn't create file if file alr exists
     pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
     
-    delay_ms(200);
+    delay_ms(400);
 
     while(1) {
         printk("in create_file, waiting\n");
@@ -506,8 +506,9 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 selected_index = 0;  // Reset selection
                 top_index = 0;       // Reset view position
             } else {
-                // At root, so exit the file browser
-                trace("exiting file system");
+                // At root, so
+                start_screen(); // go back to the start screen
+                // trace("exiting file system");
                 return;
             }
             delay_ms(200); // Debounce
@@ -598,7 +599,51 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     }
 }
 
-
+void start_screen(void) {
+    // Display welcome screen with bouncing Pi symbol animation
+    int bounce_x = SSD1306_WIDTH / 2;
+    int bounce_y = 30;
+    int dx = 1;
+    int dy = 1;
+    int frame = 0;
+    
+    while (gpio_read(input_single) && gpio_read(input_right) && 
+           gpio_read(input_bottom) && gpio_read(input_top) && 
+           gpio_read(input_left)) {
+        
+        display_clear();
+        
+        display_write(8, 2, "SUZITI File Browser", WHITE, BLACK, 1);
+        display_draw_line(0, 12, SSD1306_WIDTH, 12, WHITE);
+        
+        // Draw a cute <3 folder icon using primitive shapes
+        display_fill_rect(bounce_x - 7, bounce_y - 4, 14, 10, WHITE);
+        display_fill_rect(bounce_x - 5, bounce_y - 6, 10, 2, WHITE);
+        display_fill_rect(bounce_x - 6, bounce_y - 3, 12, 8, BLACK);
+        display_fill_rect(bounce_x - 4, bounce_y - 2, 8, 2, WHITE);
+        display_fill_rect(bounce_x - 4, bounce_y + 1, 8, 2, WHITE);
+        display_fill_rect(bounce_x - 4, bounce_y + 4, 8, 2, WHITE);
+        
+        if (frame % 30 < 15) {
+            display_write(10, 48, "Press any button", WHITE, BLACK, 1);
+        }
+        display_update();
+        
+        // bouncing effect
+        bounce_x += dx;
+        bounce_y += dy;
+        
+        if (bounce_x <= 10 || bounce_x >= SSD1306_WIDTH - 10) {
+            dx = -dx;
+        }
+        if (bounce_y <= 20 || bounce_y >= 40) {
+            dy = -dy;
+        }
+        
+        frame++;
+        delay_ms(50);  // Control animation speed
+    }
+}
 
 
 
@@ -647,49 +692,7 @@ void notmain(void) {
     trace("Loading the root directory\n");
     pi_dirent_t root = fat32_get_root(&fs);
   
-    // Display welcome screen with bouncing Pi symbol animation
-    int bounce_x = SSD1306_WIDTH / 2;
-    int bounce_y = 30;
-    int dx = 1;
-    int dy = 1;
-    int frame = 0;
-    
-    while (gpio_read(input_single) && gpio_read(input_right) && 
-           gpio_read(input_bottom) && gpio_read(input_top) && 
-           gpio_read(input_left)) {
-        
-        display_clear();
-        
-        display_write(8, 2, "SUZITI File Browser", WHITE, BLACK, 1);
-        display_draw_line(0, 12, SSD1306_WIDTH, 12, WHITE);
-        
-        // Draw a cute <3 folder icon using primitive shapes
-        display_fill_rect(bounce_x - 7, bounce_y - 4, 14, 10, WHITE);
-        display_fill_rect(bounce_x - 5, bounce_y - 6, 10, 2, WHITE);
-        display_fill_rect(bounce_x - 6, bounce_y - 3, 12, 8, BLACK);
-        display_fill_rect(bounce_x - 4, bounce_y - 2, 8, 2, WHITE);
-        display_fill_rect(bounce_x - 4, bounce_y + 1, 8, 2, WHITE);
-        display_fill_rect(bounce_x - 4, bounce_y + 4, 8, 2, WHITE);
-        
-        if (frame % 30 < 15) {
-            display_write(10, 48, "Press any button", WHITE, BLACK, 1);
-        }
-        display_update();
-        
-        // bouncing effect
-        bounce_x += dx;
-        bounce_y += dy;
-        
-        if (bounce_x <= 10 || bounce_x >= SSD1306_WIDTH - 10) {
-            dx = -dx;
-        }
-        if (bounce_y <= 20 || bounce_y >= 40) {
-            dy = -dy;
-        }
-        
-        frame++;
-        delay_ms(50);  // Control animation speed
-    }
+    start_screen();
     
     delay_ms(200); // Debounce
     
