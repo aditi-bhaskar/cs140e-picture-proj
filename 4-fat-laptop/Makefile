@@ -1,6 +1,7 @@
 # our notmain code:
 
-PROGS= 1-test-fat-laptop.c
+# PROGS= 1-test-fat-laptop.c
+PROGS= 1-test-fat-laptop-aditi.c
 #PROGS= tests/2-fat32-ls.c
 
 
