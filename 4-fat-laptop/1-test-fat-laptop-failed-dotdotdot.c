@@ -216,51 +216,85 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
 }
 
-// Extended directory entry with parent pointer for navigation; funky but okay
-typedef struct {
-    pi_dirent_t entry;         // The actual directory entry
-    void* parent;              // Pointer to parent directory entry
-} ext_dirent_t;
-
-// Then, update the show_files function to use this extended structure:
-
 void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Constants for navigation
     const uint32_t NUM_ENTRIES_TO_SHOW = 4; // Show 4 files at a time on screen
     
-    // Create an extended directory structure to track parents
-    ext_dirent_t current_dir;
-    current_dir.entry = *starting_directory;
-    current_dir.parent = NULL;  // Root has no parent
+    // Create a copy of the starting directory to keep track of where we are
+    pi_dirent_t current_directory = *starting_directory;
     
     // Navigation state variables
     uint32_t top_index = 0;      // First visible entry index
     uint32_t selected_index = 0;  // Currently selected entry
-    int entries_offset = 0;       // Offset for skipping special directories
     
     // Main file browser loop
     while(1) {
         // Read current directory contents
-        pi_directory_t files = fat32_readdir(fs, &current_dir.entry);
+        pi_directory_t files = fat32_readdir(fs, &current_directory);
         uint32_t total_entries = files.ndirents;
 
-        printk("Got %d files.\n", files.ndirents);
+        printk("Got %d files in directory: %s (cluster %d)\n", files.ndirents, 
+               current_directory.name, current_directory.cluster_id);
         
-        // Count how many entries start with . to calculate our offset (bc we don't show them)
-        entries_offset = 0;
-        for (int i = 0; i < total_entries; i++) {
+        // DEBUG: Let's inspect all entries and look for special directories
+        for (int i = 0; i < files.ndirents; i++) {
             pi_dirent_t *dirent = &files.dirents[i];
-            if (dirent->name[0] == '.') {
-                // Skip entries that start with . bc they are funky and somehow refer to cluster 0
-                entries_offset++;
+            
+            // Deep debug for "..." entry
+            if (dirent->name[0] == '.' && dirent->name[1] == '.' && dirent->name[2] == '.') {
+                printk("\n---- DEBUG: '...' ENTRY FOUND ----\n");
+                printk("  Index: %d\n", i);
+                printk("  Name: '%s'\n", dirent->name);
+                printk("  Name bytes: [%d][%d][%d][%d]\n", 
+                      dirent->name[0], dirent->name[1], dirent->name[2], dirent->name[3]);
+                printk("  Cluster ID: %d\n", dirent->cluster_id);
+                printk("  Bytes: %d\n", dirent->nbytes);
+                printk("  is_dir_p before: %d\n", dirent->is_dir_p);
+                
+                // Force it to be a directory
+                dirent->is_dir_p = 1;
+                
+                // Trim any trailing spaces
+                int j = 3;
+                while(dirent->name[j] == ' ' && j < 8) { // FAT filenames can be up to 8 chars
+                    dirent->name[j] = '\0';
+                    j++;
+                }
+                
+                printk("  is_dir_p after: %d\n");
+                printk("  Name after trimming: '%s'\n", dirent->name);
+                printk("  Current dir cluster: %d\n", current_directory.cluster_id);
+                printk("---------------------------------\n\n");
+            }
+            // Debug for ".." entry as well
+            else if (dirent->name[0] == '.' && dirent->name[1] == '.' && 
+                    (dirent->name[2] == '\0' || dirent->name[2] == ' ')) {
+                printk("\n---- DEBUG: '..' ENTRY FOUND ----\n");
+                printk("  Index: %d\n", i);
+                printk("  Name: '%s'\n", dirent->name);
+                printk("  Cluster ID: %d\n", dirent->cluster_id);
+                printk("  Bytes: %d\n", dirent->nbytes);
+                printk("  is_dir_p: %d\n", dirent->is_dir_p);
+                printk("  Current dir cluster: %d\n", current_directory.cluster_id);
+                printk("---------------------------------\n\n");
+                
+                // Force it to be a directory
+                dirent->is_dir_p = 1;
+                // Trim any trailing spaces
+                if (dirent->name[2] == ' ') {
+                    dirent->name[2] = '\0';
+                }
+            }
+            
+            if (dirent->is_dir_p) {
+                printk("\tD: %s (cluster %d)\n", dirent->name, dirent->cluster_id);
+            } else {
+                printk("\tF: %s (cluster %d; %d bytes)\n", dirent->name, dirent->cluster_id, dirent->nbytes);
             }
         }
         
-        // Adjusted total entries (excluding special directories)
-        uint32_t adjusted_total = total_entries - entries_offset;
-        
-        // Handle empty directories (after filtering)
-        if (adjusted_total == 0) {
+        // Handle empty directories
+        if (total_entries == 0) {
             display_clear();
             display_write(10, 20, "Empty directory", WHITE, BLACK, 1);
             display_update();
@@ -269,13 +303,13 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         }
         
         // Reset selection when entering a new directory
-        if (selected_index >= adjusted_total) {
+        if (selected_index >= total_entries) {
             selected_index = 0;
             top_index = 0;
         }
         
         // Calculate visible range
-        uint32_t bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, adjusted_total - 1);
+        uint32_t bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, total_entries - 1);
         
         // Build the display text
         char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
@@ -283,58 +317,55 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         int text_pos = 0;
         
         // Add visible entries to the display buffer
-        int real_index = 0;  // Index into the actual directory entries
-        int filtered_index = 0;  // Index into filtered entries (excluding '.' entries)
-        
-        while (filtered_index <= bot_index && real_index < total_entries) {
-            pi_dirent_t *dirent = &files.dirents[real_index];
+        for (int display_index = top_index; display_index <= bot_index; display_index++) {
+            pi_dirent_t *dirent = &files.dirents[display_index];
             
-            // Skip entries that start with . (as before)
-            if (dirent->name[0] == '.') {
-                real_index++;
-                continue;
+            // Add selection indicator
+            if (display_index == selected_index) {
+                text_to_display[text_pos++] = '>';
+            } else {
+                text_to_display[text_pos++] = ' ';
             }
             
-            // Only process entries that are within our visible range
-            if (filtered_index >= top_index && filtered_index <= bot_index) {
-                // Add selection indicator
-                if (filtered_index == selected_index) {
-                    text_to_display[text_pos++] = '>';
-                } else {
-                    text_to_display[text_pos++] = ' ';
-                }
-                
-                // If it's a directory, add the slash
-                if (dirent->is_dir_p) {
-                    text_to_display[text_pos++] = '/';
-                }
-                
-                // Copy filename
-                int j = 0;
-                // Skip trailing spaces when displaying
-                int last_non_space = -1;
-                while (dirent->name[j] != '\0' && text_pos < sizeof(text_to_display) - 2) {
-                    if (dirent->name[j] != ' ') {
-                        last_non_space = j;
-                    }
-                    text_to_display[text_pos++] = dirent->name[j++];
-                }
-                
-                // Trim trailing spaces in display
-                if (last_non_space >= 0 && j > 0) {
-                    text_pos = text_pos - (j - last_non_space - 1);
-                }
-                
-                // Add newline
-                if (text_pos < sizeof(text_to_display) - 2) {
-                    text_to_display[text_pos++] = '\n';
-                }
-                
-                // Ensure null termination
-                text_to_display[text_pos] = '\0';
+            // Check for special directory by examining the characters
+            int is_special_dir = 0;
+            
+            // Check for ".." and "..." patterns and treat them as directories
+            if ((dirent->name[0] == '.' && dirent->name[1] == '.' && 
+                 (dirent->name[2] == '\0' || dirent->name[2] == ' ')) ||
+                (dirent->name[0] == '.' && dirent->name[1] == '.' && dirent->name[2] == '.' &&
+                 (dirent->name[3] == '\0' || dirent->name[3] == ' '))) {
+                is_special_dir = 1; 
             }
-            filtered_index++;
-            real_index++;
+            
+            // If it's a directory or special directory, add the slash
+            if (dirent->is_dir_p || is_special_dir) {
+                text_to_display[text_pos++] = '/';
+            }
+            
+            // Copy filename
+            int j = 0;
+            // Skip trailing spaces when displaying
+            int last_non_space = -1;
+            while (dirent->name[j] != '\0' && text_pos < sizeof(text_to_display) - 2) {
+                if (dirent->name[j] != ' ') {
+                    last_non_space = j;
+                }
+                text_to_display[text_pos++] = dirent->name[j++];
+            }
+            
+            // Trim trailing spaces in display
+            if (last_non_space >= 0 && j > 0) {
+                text_pos = text_pos - (j - last_non_space - 1);
+            }
+            
+            // Add newline
+            if (text_pos < sizeof(text_to_display) - 2) {
+                text_to_display[text_pos++] = '\n';
+            }
+            
+            // Ensure null termination
+            text_to_display[text_pos] = '\0';
         }
         
         // Display current directory name and file list
@@ -342,10 +373,10 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         
         // Prepare directory name display
         char dir_name[22]; // Limit to screen width
-        if (current_dir.entry.name[0] == '\0') {
+        if (current_directory.name[0] == '\0') {
             safe_strcpy(dir_name, "Root Directory", sizeof(dir_name));
         } else {
-            safe_strcpy(dir_name, current_dir.entry.name, sizeof(dir_name));
+            safe_strcpy(dir_name, current_directory.name, sizeof(dir_name));
         }
         
         // Show the current directory at the top
@@ -356,11 +387,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         display_write(0, 12, text_to_display, WHITE, BLACK, 1);
         
         // Show navigation help
-        if (current_dir.parent != NULL) {
-            display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Back >:Open", WHITE, BLACK, 1);
-        } else {
-            display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Exit >:Open", WHITE, BLACK, 1);
-        }
+        display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Back >:Open", WHITE, BLACK, 1);
         
         display_update();
         delay_ms(100); // Debouncing delay
@@ -375,22 +402,104 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         
         // Handle button input
         if (!gpio_read(input_left)) {
-            // This is the "back" button - navigate to parent directory if we have one
-            if (current_dir.parent != NULL) {
+            // This is the "back" button - let's navigate to parent directory
+            
+            // Find the "..." entry for going back (since we're treating "..." as parent directory)
+            int parent_index = -1;
+            for (int i = 0; i < total_entries; i++) {
+                pi_dirent_t *dir_entry = &files.dirents[i];
+                // Check for "..." (with or without trailing space)
+                if (dir_entry->name[0] == '.' && dir_entry->name[1] == '.' && dir_entry->name[2] == '.' &&
+                    (dir_entry->name[3] == '\0' || dir_entry->name[3] == ' ')) {
+                    parent_index = i;
+                    
+                    printk("\n== BACK BUTTON: Selected '...' entry for navigation ==\n");
+                    printk("  Index: %d\n", i);
+                    printk("  Name: '%s'\n", dir_entry->name);
+                    printk("  Cluster ID: %d\n", dir_entry->cluster_id);
+                    printk("  is_dir_p: %d\n", dir_entry->is_dir_p);
+                    
+                    // Force it to be a directory
+                    files.dirents[i].is_dir_p = 1;
+                    // Trim any trailing spaces
+                    if (files.dirents[i].name[3] == ' ') {
+                        files.dirents[i].name[3] = '\0';
+                    }
+                    
+                    printk("  Name after trimming: '%s'\n", files.dirents[i].name);
+                    printk("  Current dir cluster: %d\n", current_directory.cluster_id);
+                    printk("  Attempting to navigate to cluster: %d\n", files.dirents[i].cluster_id);
+                    
+                    // Test if we have a potential issue with cluster 0
+                    if (files.dirents[i].cluster_id == 0) {
+                        printk("  WARNING: Cluster ID is 0, which might cause navigation issues!\n");
+                        
+                        // Try to find a ".." entry as fallback
+                        int fallback_index = -1;
+                        for (int j = 0; j < total_entries; j++) {
+                            if (j != i && // Skip the current "..." entry
+                                files.dirents[j].name[0] == '.' && 
+                                files.dirents[j].name[1] == '.' && 
+                                (files.dirents[j].name[2] == '\0' || files.dirents[j].name[2] == ' ')) {
+                                fallback_index = j;
+                                printk("  FALLBACK: Found '..' entry at index %d with cluster %d\n", 
+                                      j, files.dirents[j].cluster_id);
+                                break;
+                            }
+                        }
+                        
+                        if (fallback_index != -1) {
+                            printk("  Using '..' entry as fallback for navigation\n");
+                            parent_index = fallback_index;
+                        } else {
+                            printk("  No fallback entry found.\n");
+                        }
+                    }
+                    
+                    printk("================================================\n\n");
+                    break;
+                }
+            }
+            
+            // If no "..." entry found, try to find a ".." entry as fallback
+            if (parent_index == -1) {
+                printk("\n== BACK BUTTON: No '...' entry found, looking for '..' as fallback ==\n");
+                
+                for (int i = 0; i < total_entries; i++) {
+                    pi_dirent_t *dir_entry = &files.dirents[i];
+                    if (dir_entry->name[0] == '.' && dir_entry->name[1] == '.' && 
+                        (dir_entry->name[2] == '\0' || dir_entry->name[2] == ' ')) {
+                        parent_index = i;
+                        
+                        printk("  Fallback found at index %d\n", i);
+                        printk("  Name: '%s'\n", dir_entry->name);
+                        printk("  Cluster ID: %d\n", dir_entry->cluster_id);
+                        printk("  is_dir_p: %d\n", dir_entry->is_dir_p);
+                        
+                        // Force it to be a directory
+                        files.dirents[i].is_dir_p = 1;
+                        
+                        printk("================================================\n\n");
+                        break;
+                    }
+                }
+            }
+            
+            if (parent_index != -1) {
+                // Navigate to parent directory using the chosen entry
                 display_clear();
-                display_write(10, 20, "Going back...", WHITE, BLACK, 1);
+                display_write(10, 20, "Going up...", WHITE, BLACK, 1);
                 display_update();
                 delay_ms(200);
                 
-                // We need to cast the parent pointer back to ext_dirent_t*
-                ext_dirent_t* parent_dir = (ext_dirent_t*)current_dir.parent;
+                printk("NAVIGATION: Attempting to navigate using directory entry at index %d\n", parent_index);
+                printk("  Target cluster: %d\n", files.dirents[parent_index].cluster_id);
                 
-                // Navigate to parent directory
-                current_dir = *parent_dir;
-                selected_index = 0;  // Reset selection
+                current_directory = files.dirents[parent_index];
+                selected_index = 0;  // Reset selection when going up
                 top_index = 0;       // Reset view position
             } else {
-                // At root, so exit the file browser
+                // If no navigation entry found (at root), exit file browser
                 trace("exiting file system");
                 return;
             }
@@ -398,7 +507,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         }
         else if (!gpio_read(input_bottom)) {
             // Move selection down
-            if (selected_index < adjusted_total - 1) {
+            if (selected_index < total_entries - 1) {
                 selected_index++;
                 
                 // Scroll if selection goes below visible area
@@ -421,69 +530,101 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             delay_ms(200); // Prevent rapid scrolling
         }
         else if (!gpio_read(input_right)) {
-            // Convert selected_index to real index
-            int real_selected_index = 0;
-            int count = 0;
+            // Get the selected directory entry
+            pi_dirent_t *selected_dirent = &files.dirents[selected_index];
             
-            for (int i = 0; i < total_entries; i++) {
-                if (files.dirents[i].name[0] == '.') {
-                    continue;  // Skip entries that start with .
+            // CUSTOM BEHAVIOR: Use ".." to refresh current directory (like ".")
+            if (selected_dirent->name[0] == '.' && selected_dirent->name[1] == '.' && 
+                (selected_dirent->name[2] == '\0' || selected_dirent->name[2] == ' ')) {
+                selected_dirent->is_dir_p = 1;
+                
+                // ".." selected - STAY in current directory (like ".")
+                display_clear();
+                display_write(10, 20, "Refreshing directory...", WHITE, BLACK, 1);
+                display_update();
+                delay_ms(200);
+                // Simply continue the loop - don't change directory
+                continue;
+            }
+            // CUSTOM BEHAVIOR: Use "..." to navigate to parent (like "..")
+            else if (selected_dirent->name[0] == '.' && selected_dirent->name[1] == '.' && 
+                     selected_dirent->name[2] == '.' &&
+                     (selected_dirent->name[3] == '\0' || selected_dirent->name[3] == ' ')) {
+                selected_dirent->is_dir_p = 1;
+                
+                // Trim any trailing spaces
+                if (selected_dirent->name[3] == ' ') {
+                    selected_dirent->name[3] = '\0';
                 }
                 
-                if (count == selected_index) {
-                    real_selected_index = i;
-                    break;
+                printk("\n== RIGHT BUTTON: Selected '...' entry for navigation ==\n");
+                printk("  Index: %d\n", selected_index);
+                printk("  Name: '%s'\n", selected_dirent->name);
+                printk("  Cluster ID: %d\n", selected_dirent->cluster_id);
+                printk("  is_dir_p: %d\n", selected_dirent->is_dir_p);
+                printk("  Current dir cluster: %d\n", current_directory.cluster_id);
+                
+                // Check for cluster 0 issue
+                if (selected_dirent->cluster_id == 0) {
+                    printk("  WARNING: Cluster ID is 0, which might cause navigation issues!\n");
+                    
+                    // Try to find a ".." entry to check its cluster
+                    for (int i = 0; i < total_entries; i++) {
+                        pi_dirent_t *dir_entry = &files.dirents[i];
+                        if (dir_entry->name[0] == '.' && dir_entry->name[1] == '.' && 
+                            (dir_entry->name[2] == '\0' || dir_entry->name[2] == ' ')) {
+                            printk("  INFO: '..' entry found at index %d with cluster %d\n", 
+                                  i, dir_entry->cluster_id);
+                            break;
+                        }
+                    }
                 }
-                count++;
+                
+                printk("================================================\n\n");
+                
+                // "..." selected - go to parent directory
+                display_clear();
+                display_write(10, 20, "Going to parent...", WHITE, BLACK, 1);
+                display_update();
+                delay_ms(200);
+                
+                current_directory = *selected_dirent;
+                selected_index = 0;  // Reset selection
+                top_index = 0;       // Reset view position
+                continue;
             }
             
-            // Get the selected directory entry
-            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
-            
-            // Handle selection action based on entry type
+            // Handle selection action based on entry type (for regular directories/files)
             if (selected_dirent->is_dir_p) {
-                // Create a new extended directory entry with parent pointer
-                ext_dirent_t* new_parent = kmalloc(sizeof(ext_dirent_t));
-                
-                // Copy the current directory to be used as parent
-                *new_parent = current_dir;
-                
-                // Create a new current directory with the selected entry
-                current_dir.entry = *selected_dirent;
-                current_dir.parent = new_parent;
-                
                 // Regular directory - navigate into it
                 display_clear();
                 display_write(10, 20, "Entering directory...", WHITE, BLACK, 1);
                 display_update();
                 delay_ms(200);
                 
+                current_directory = *selected_dirent;
                 selected_index = 0;  // Reset selection for new directory
                 top_index = 0;       // Reset view position
             } 
             else {
                 // It's a file - display its content
-                display_file(fs, &current_dir.entry, selected_dirent);
+                display_file(fs, &current_directory, selected_dirent);
             }
             delay_ms(200); // Debounce
         }
         else if (!gpio_read(input_single)) {
-            // TODO: ADITI IS THIS WHAT SINGLE SHOULD DO???
             // Create a new file in current directory
             display_clear();
-            display_write(5, 20, "Creating new file... (not implemented)", WHITE, BLACK, 1);
+            display_write(5, 20, "Creating new file...", WHITE, BLACK, 1);
             display_update();
             delay_ms(500);
             
-            //create_file(fs, &current_dir.entry, files);
+            create_file(fs, &current_directory, files);
             
             delay_ms(200); // Debounce
         }
     }
 }
-
-
-
 
 
 
