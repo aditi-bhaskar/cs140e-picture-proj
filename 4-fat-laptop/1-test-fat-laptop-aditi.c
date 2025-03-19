@@ -110,11 +110,10 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
             printk("Reading file\n");
             // pi_file_t *file = fat32_read(fs, directory, filename);
 
-            printk("clearing display\n");
+            printk("writing to display\n");
 
             display_clear();
-            printk("writing to display\n");
-            display_write(10,10,"writing file!",0b01110111, 0, 1);
+            display_write(10,10,"writing file!", WHITE, BLACK, 1);
             display_update();
 
             // write : "prefetch flush* " to the file
