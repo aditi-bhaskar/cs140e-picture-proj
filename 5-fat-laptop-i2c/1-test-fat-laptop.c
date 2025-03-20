@@ -92,7 +92,9 @@ void navigate_file_system(pi_dirent_t *directory);
 void start_screen(void);
 void setup_directory_info(pi_dirent_t *current_dir);
 int show_pbm_menu(void);
-void display_text(pi_file_t *file, const char *filename) ;
+void display_text(pi_file_t *file, const char *filename);
+int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines);
+void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count);
 
 //******************************************
 // FUNCTIONS!!
@@ -112,13 +114,11 @@ void ls(pi_dirent_t *directory) {
     }
 }
 
-
 void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
     display_clear();
-    display_write(10, 0, "Appending to file", WHITE, BLACK, 1);
+    display_write(10, 0, "Copying file", WHITE, BLACK, 1);
     display_write(10, 20, origin_filename, WHITE, BLACK, 1); // say which file
     display_write(10, 30, dest_filename, WHITE, BLACK, 1); // say which file
-    // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
     display_update();
 
     pi_file_t *file = fat32_read(fs, directory, origin_filename);
@@ -128,7 +128,7 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
     delay_ms(600);
 }
 
-
+// TODO add functionality to call this
 void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
     ls(directory);
     
@@ -152,25 +152,80 @@ void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with
 
 
 
+void display_file_text_while_appending(const char *filename, char **text, int line_count) {
+    printk("displaying file while appending\n");
+    char *display_buffer = *text;
+    // clear display
+    display_clear();
+        
+    // write file name at the top 
+    display_write(10, 0, filename, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+    
+    // write file content
+    display_write(0, 12, display_buffer, WHITE, BLACK, 1);
+    
+    // add scroll indicators if needed
+    if (current_start_line > 0) {
+        display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
+    }
+    
+    if (current_start_line + lines_per_screen < line_count) {
+        display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
+    }
+    
+    // add navigation help at bottom
+    display_write(0, SSD1306_HEIGHT - 8, "<^v>:Write *:Exit", WHITE, BLACK, 1);
+    display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
+    
+    display_update();
+}
 
+void display_text_while_appending(pi_file_t *file, const char *filename) {
+    trace("about to display text file\n");
 
+    int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
+    int *line_positions = kmalloc(sizeof(int) * estimated_lines);
+    int line_count = split_text_up(&line_positions, file, estimated_lines); // populates line_positions
+    
+    // buf for displayed text
+    char display_buffer[512];
+    char *display_buffer_ptr = display_buffer;
+    
+    // init the starting line index (used for scrolling)
+    current_start_line = 0;
+    
+    while(1) {
+        printk("in while loop\n");
+        determine_screen_content_file(&display_buffer_ptr, 512, file, line_positions, line_count);
+        display_file_text_while_appending(filename, &display_buffer_ptr, line_count);
 
-
+        if( (current_start_line + lines_per_screen) < line_count ) {          
+            // Scroll down one line at a time
+            current_start_line++;
+            delay_ms(40); // show it scrolling every time very quickly ?? // todo maybe remove this
+        } else {
+            break;
+        }
+    }
+}
     
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
-    // display_clear();
-    // display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
-    // display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
-    // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
-    // display_update();
 
     // TODO show file here!!
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
+
+    if  (file == NULL) printk ("FILE NOT FOUND -- CANT READ IT!!");
     char *data_old = file->data;
 
     // write : "append me" to the file
     char data[strlen(data_old) + strlen(append_me)+ 1];
+    data[strlen(data_old) + strlen(append_me)] = '\0';
+
+    printk ("filename: %s\n", filename);
+    printk("\n\n\nold data contents = %s\n", data_old);
+    printk("append me contents = %s\n", append_me);
     strcpy(data, data_old);   // Copy old data
     strcat(data, append_me);  // Append new data
     printk("data contents = %s\n", data);
@@ -184,15 +239,64 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, filename, &new_file_contents);
 
-    file = fat32_read(fs, directory, filename);
-    display_clear();
-    display_text(file, filename); // TODO MAKE COPY OF THIS FUNCTION WHICH 1. GOES TO BOTTOM and 2. SHOWS OUR MENU ON IT INSTEAD
-    display_update();
+    printk("writing to screen\n");
+    pi_file_t *file_read = fat32_read(fs, directory, filename);
+    if (file_read == NULL) printk ("THE FILE IS NULL!!!\n");
+    printk("fileread contents: %s", file_read->data);
+    printk(".\n"); // incase prev line was empty spaces or smth
+    display_text_while_appending(file_read, filename);    
 
 
-    delay_ms(200);
+    // delay_ms(300);
 }
 
+
+void create_file(pi_dirent_t *directory) {
+    ls(directory);
+
+    // doesn't create file if file alr exists
+    pi_dirent_t *created_file;
+    // create a file; name it a random number like demoLETTER
+    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
+    do {
+        filename[4] = unique_file_id++; // make sure we create a new file!!
+        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
+    } while (created_file == NULL);
+    
+    delay_ms(400);
+
+    // display navigation hints
+    display_clear();
+    display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
+    display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
+    display_update();
+    while(1) {
+        printk("in create_file, waiting\n");
+        // exit file writing
+        if (!gpio_read(input_single)) {
+            // exit file creation return
+            printk("broke out of create_file\n");
+            delay_ms(200);
+            break;
+        }
+
+        // these buttons write to file
+        if (!gpio_read(input_left)) {
+            append_to_file(&fs, directory, filename, "*prefetch flush* ");
+        } else if (!gpio_read(input_bottom)) {
+            append_to_file(&fs, directory, filename, "MORE PIZZA ");
+        } else if (!gpio_read(input_right)) {
+            append_to_file(&fs, directory, filename, "minor ");
+        } else if (!gpio_read(input_top)) {
+            append_to_file(&fs, directory, filename, "Dawson!! ");
+        } 
+        delay_ms(200);
+
+    }
+
+    printk("AFTER CREATE FILE:\n");
+    ls(directory);
+}
 
 void create_dir(pi_dirent_t *directory) {
     ls(directory);
@@ -218,55 +322,8 @@ void create_dir(pi_dirent_t *directory) {
     delay_ms(2000);
 }
 
-void create_file(pi_dirent_t *directory) {
-    ls(directory);
 
-    // doesn't create file if file alr exists
-    pi_dirent_t *created_file;
-    // create a file; name it a random number like demoLETTER
-    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
-    do {
-        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
-        filename[4] = unique_file_id++; // make sure we create a new file!!
-    } while (created_file == NULL);
-    
-    delay_ms(400);
 
-    while(1) {
-        printk("in create_file, waiting\n");
-        // display_clear();
-        // display navigation hints
-        display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
-        display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
-        display_update();
-
-        // exit file writing
-        if (!gpio_read(input_single)) {
-            // exit file creation return
-            printk("broke out of create_file\n");
-            delay_ms(200);
-            break;
-        }
-
-        // TODO display this stuff on screen as im writing???
-
-        // these buttons write to file
-        if (!gpio_read(input_left)) {
-            append_to_file(&fs, directory, filename, "*prefetch flush* ");
-        } else if (!gpio_read(input_bottom)) {
-            append_to_file(&fs, directory, filename, "MORE PIZZA ");
-        } else if (!gpio_read(input_right)) {
-            append_to_file(&fs, directory, filename, "minor ");
-        } else if (!gpio_read(input_top)) {
-            append_to_file(&fs, directory, filename, "Dawson!! ");
-        } 
-        delay_ms(200);
-
-    }
-
-    printk("AFTER CREATE FILE:\n");
-    ls(directory);
-}
 
 
 void display_show_drawing_status(int drawing_mode) {
@@ -544,6 +601,9 @@ int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines
 }
 
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count) {
+    
+    printk("in determine_screen_content_file\n");
+
     char *display_buffer = *text;
     display_buffer[0] = '\0';
     int buf_pos = 0;
@@ -614,7 +674,7 @@ void display_file_text(const char *filename, char **text, int line_count) {
 }
 
 void display_text(pi_file_t *file, const char *filename) {
-    trace("about to display text file");
+    trace("about to display text file\n");
 
     int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
     int *line_positions = kmalloc(sizeof(int) * estimated_lines);
