@@ -371,6 +371,7 @@ int is_pbm_file(const char *filename) {
     return 0;
 }
 
+
 /**
  * Parse and display a PBM file
  * Supports both P1 (ASCII) and P4 (binary) formats

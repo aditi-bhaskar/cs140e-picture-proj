@@ -11,7 +11,6 @@
 
 // 5. make duplicate file accessible; inside the text file
 
-
 #include "display.c"
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
@@ -361,13 +360,6 @@ void display_pbm(pi_file_t *file, const char *filename) {
                 cursor_moved = 1;
             }
         }
-        else if (!gpio_read(input_top)) {
-            // move up
-            if (cursor_y > 10) { // bounds check for header
-                cursor_y -= cursor_speed;  
-                cursor_moved = 1;
-            }
-        }
         else if (!gpio_read(input_bottom)) {
             // move down 
             if (cursor_y < bottom_boundary) { // bounds check for bottom
@@ -375,10 +367,17 @@ void display_pbm(pi_file_t *file, const char *filename) {
                 cursor_moved = 1;
             }
         }
+        else if (!gpio_read(input_top)) {
+            // move up
+            if (cursor_y > 10) { // bounds check for header
+                cursor_y -= cursor_speed;  
+                cursor_moved = 1;
+            }
+        }
         else if (!gpio_read(input_single)) {
             // show menu
+            delay_ms(200);
             int choice = show_pbm_menu();
-            
             switch(choice) {
                 case 1: //  navigate mode (not drawing, but can move cursor)
                     drawing_mode = DRAWING_MODE_OFF;
@@ -389,6 +388,7 @@ void display_pbm(pi_file_t *file, const char *filename) {
                     break;
                     
                 case 3: // save and quit file
+                    // TODO SAVE FILE!!
                     return;
                     
                 default:
