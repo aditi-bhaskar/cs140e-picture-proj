@@ -124,6 +124,11 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
 
 }
 
+
+void dup_file(fat32_fs_t *fs, pi_dirent_t *directory) {
+    delay_ms (10);
+}
+
 void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
     ls(fs, directory);
 
@@ -278,20 +283,23 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
     printk(" in show menu! \n\n");
     delay_ms(400);
     uint8_t selected_item = 1;
-    uint8_t NUM_MENU_OPTIONS = 2;
+    uint8_t NUM_MENU_OPTIONS = 3; // cr f, cr d, dup f
 
     while(1) {
 
         display_clear();
         // meny 
-        display_draw_char(128 - (6 * 3), selected_item*10, '(', WHITE, BLACK, 1);
-        display_draw_char(128 - (6 * 1), selected_item*10, ')', WHITE, BLACK, 1);
+        display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
+        // display_draw_char(SSD1306_WIDTH - (6 * 2), selected_item*10, ')', WHITE, BLACK, 1);
 
         // menu options
-        display_draw_char(128 - (6 * 2), 10, 'f', WHITE, BLACK, 1);
-        display_draw_char(128 - (6 * 2), 20, 'd', WHITE, BLACK, 1);
+        display_write(12, 10, "create file", WHITE, BLACK, 1);
+        display_write(12, 20, "create dir ", WHITE, BLACK, 1);
+        display_write(12, 30, "duplic file", WHITE, BLACK, 1);
 
-        display_write(10, 2, "menu\n>: select, \n*: exit", WHITE, BLACK, 1);
+        // control info
+        display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
+        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Do *:Exit", WHITE, BLACK, 1);
 
         display_update();
 
@@ -303,11 +311,10 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
                     create_file(fs, directory);
                     break;
                 case 2:
-                    printk("gonna create a dir");
                     create_dir(fs, directory);
                     break;
                 default:
-                    printk("didn't enter any cases");
+                    dup_file(fs, directory);
                     break;
             }
             delay_ms(200);
@@ -315,9 +322,11 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
         }
         else if (!gpio_read(input_bottom)) {
             if (selected_item < NUM_MENU_OPTIONS) selected_item++;
+            delay_ms(200);
         }
         else if (!gpio_read(input_top)) {
             if (selected_item > 1) selected_item--;
+            delay_ms(200);
         }
         else if (!gpio_read(input_single)) {
             // close menu
@@ -651,15 +660,14 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             if (selected_dirent->is_dir_p) {
                 // Create a new extended directory entry with parent pointer
                 ext_dirent_t* new_parent = kmalloc(sizeof(ext_dirent_t));
-                
+
                 // Copy the current directory to be used as parent
                 *new_parent = current_dir;
-                
+
                 // Create a new current directory with the selected entry
                 current_dir.entry = *selected_dirent;
                 current_dir.parent = new_parent;
                 setup_directory_info(&current_dir);
-                
                 
                 // Regular directory - navigate into it
                 display_clear();
