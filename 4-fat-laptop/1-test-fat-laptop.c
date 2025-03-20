@@ -92,6 +92,35 @@ void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
 }
 
 
+void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename, char* append_me) {   
+    display_clear();
+    display_write(10, 0, "Appending to file", WHITE, BLACK, 1);
+    display_write(10, 20, origin_filename, WHITE, BLACK, 1); // say which file
+    display_write(10, 30, dest_filename, WHITE, BLACK, 1); // say which file
+    display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
+    display_update();
+
+    // TODO show file here!!
+
+    printk(">>!!! origin file name = %s\n\n", origin_filename);
+    printk(">>!!! file name = %s\n\n", dest_filename);
+
+    printk("Reading file\n");
+    pi_file_t *file = fat32_read(fs, directory, origin_filename);
+    // char *data = file->data;
+
+    // pi_file_t new_file_contents = (pi_file_t) {
+    //     .data = data,
+    //     .n_data = strlen(data),
+    //     .n_alloc = strlen(data),
+    // };
+
+    printk("writing to fat\n");
+    int writ = fat32_write(fs, directory, dest_filename, file);
+
+    delay_ms(600);
+}
+    
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
     display_clear();
     display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
@@ -101,9 +130,11 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
 
     // TODO show file here!!
     
+    printk(">>!!! file name = %s\n\n", filename);
+
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
-    char *data_old = file->data;
+    char *data_old = "file->data";
 
     // write : "append me" to the file
     char data[strlen(data_old) + strlen(append_me)+ 1];
@@ -125,34 +156,35 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
 
 void dup_file(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
     ls(fs, directory);
-
-
     
     pi_dirent_t *created_file = NULL;
     char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
     do {
+        filename[4] = unique_dup_id; // make sure we create a new file!!
         created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
-        filename[4] = unique_dup_id++; // make sure we create a new file!!
+        unique_dup_id++; // if needed for the next loop/iteration
     } while (created_file == NULL);
 
     printk(">>DUPLICATING FILE %s", filename);
+    delay_ms(2000);
 
-    printk("Reading file\n");
-    pi_file_t *file = fat32_read(fs, directory, filename);
-    char *data = file->data;
+    copy_file_contents(fs, directory, raw_name, filename, ""); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
+    // printk("Reading file\n");
+    // pi_file_t *file = fat32_read(fs, directory, filename);
+    // char *data = file->data;
 
-    pi_file_t new_file_contents = (pi_file_t) {
-        .data = data,
-        .n_data = strlen(data),
-        .n_alloc = strlen(data),
-    };
+    // pi_file_t new_file_contents = (pi_file_t) {
+    //     .data = data,
+    //     .n_data = strlen(data),
+    //     .n_alloc = strlen(data),
+    // };
 
-    printk("writing to fat\n");
+    // printk("writing to fat\n");
 
-    printk(">>DUPLICATING FILE %s", filename);
-    ls(fs, directory);
+    // printk(">>DUPLICATING FILE %s", filename);
+    // ls(fs, directory);
 
-    int writ = fat32_write(fs, directory, filename, &new_file_contents);
+    // int writ = fat32_write(fs, directory, filename, &new_file_contents);
     
 
     ls(fs, directory);
@@ -476,7 +508,7 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
             display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
             
             display_update();
-            trace("contents of display buffer: %s", display_buffer);
+            trace("contents of display buffer: %s\n", display_buffer);
 
             while(gpio_read(input_left) && gpio_read(input_right) && 
                   gpio_read(input_top) && gpio_read(input_bottom) && 
