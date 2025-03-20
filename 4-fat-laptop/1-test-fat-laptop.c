@@ -1,5 +1,7 @@
 // TODO 
-// remove files / more on menu
+// why wont file write in a new/empty dir?
+// why won't newly duplicated files show up when scrolling?
+
 
 #include "display.c"
 
@@ -21,13 +23,12 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
-char unique_folder_id = 65; // starts at: "A" // used when creating dirs
+char unique_folder_id = 67; // starts at: "A" // used when creating dirs
 char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
 fat32_fs_t fs;
 pi_dirent_t root;
-
 
 // for navigate_file_system
 uint32_t top_index = 0;      // First visible entry index
@@ -108,13 +109,7 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
     // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
     display_update();
 
-    // TODO show file here!!
-
-    printk("\n\n\n\n\n>>!!! origin file name = %s\n\n", origin_filename);
-    printk("\n\n\n\n\n\n>>!!! file name = %s\n\n", dest_filename);
-
     pi_file_t *file = fat32_read(fs, directory, origin_filename);
-    printk("file -> data is %s\n\n", file->data);
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, dest_filename, file);
 
@@ -153,17 +148,15 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     display_update();
 
     // TODO show file here!!
-    printk(">>!!! file name = %s\n\n", filename);
-
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
-    char *data_old = "file->data";
+    char *data_old = file->data;
 
     // write : "append me" to the file
     char data[strlen(data_old) + strlen(append_me)+ 1];
     strcpy(data, data_old);   // Copy old data
     strcat(data, append_me);  // Append new data
-    printk("data contents = %s\n\n", data);
+    printk("data contents = %s\n", data);
 
     pi_file_t new_file_contents = (pi_file_t) {
         .data = data,
@@ -184,21 +177,32 @@ void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
     // doesn't create file if file alr exists
     pi_dirent_t *created_folder = NULL;
     // create a file; name it a random number like dirA
-    printk("\n\n\n creating a dir \n\n\n");
     char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
     do {
-        printk("\n\n\n in dowhile \n\n\n");
-
         created_folder = fat32_create(fs, directory, foldername, 1); // 1 = create a directory
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
-
     } while (created_folder == NULL);
+
+    // TODO ADD THIS STUFF TO CREATE THE FOLDER
+    // created_folder = 
+    //     char name[16], raw_name[16];
+    //     uint32_t cluster_id, is_dir_p, nbytes;
+    //   } pi_dirent_t;
+
+    //   typedef struct {
+    //     char *data;
+    //     size_t n_alloc,    // total bytes allocated.
+    //            n_data;     // how many bytes of data
+    //   } pi_file_t;
 
     display_clear();
     // Display navigation hints
     display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
     display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
     display_update();
+
+    printk("Created a directory!\n");
+    ls(fs, directory);
 
     delay_ms(2000);
 }
@@ -211,6 +215,7 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
     // create a file; name it a random number like demoLETTER
     char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     do {
+        printk(" IS THE DIR CLUSTER ID 0 ?? %d\n\n\n\n\n",directory->cluster_id);
         created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
         filename[4] = unique_file_id++; // make sure we create a new file!!
     } while (created_file == NULL);
@@ -248,6 +253,9 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
         delay_ms(200);
 
     }
+
+    printk("AFTER CREATE FILE:\n");
+    ls(fs, directory);
 }
 
 
@@ -382,9 +390,7 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
         }
         
     }
-
 }
-
 
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines) {
     // Preprocess the file into screen-friendly lines
@@ -811,7 +817,7 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
         }
         else if (!gpio_read(input_single)) {
-
+            printk("\n\n\n\n\t\tcluster id is 0 == BAD!! %d \n\n\n\n \n", current_dir.entry.cluster_id);
             show_menu(fs, &current_dir.entry);
 
             // // TODO MAKE HELPER -- use this for when we duplicate a dir
