@@ -816,33 +816,34 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
         }
         else if (!gpio_read(input_single)) {
+            show_menu(&current_dir.entry, selected_dirent->name);//name of file);
 
             // TODO MAKE HELPER
-            int real_selected_index = 0;
-            int count = 0;
-            for (int i = 0; i < total_entries; i++) {
-                if (files.dirents[i].name[0] == '.') {
-                    continue;  // Skip entries that start with .
-                }
-                if (count == selected_index) {
-                    real_selected_index = i;
-                    break;
-                }
-                count++;
-            }
+            // int real_selected_index = 0;
+            // int count = 0;
+            // for (int i = 0; i < total_entries; i++) {
+            //     if (files.dirents[i].name[0] == '.') {
+            //         continue;  // Skip entries that start with .
+            //     }
+            //     if (count == selected_index) {
+            //         real_selected_index = i;
+            //         break;
+            //     }
+            //     count++;
+            // }
 
-            // Get the selected directory entry
-            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
+            // // Get the selected directory entry
+            // pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
             
-            if (selected_dirent->is_dir_p) {
-                display_clear();
-                display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
-                display_update();
-                delay_ms(400);
-            } else {
-                show_menu(fs, &current_dir.entry, selected_dirent->name);//name of file);
-                delay_ms(200);
-            }
+            // if (selected_dirent->is_dir_p) {
+            //     display_clear();
+            //     display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
+            //     display_update();
+            //     delay_ms(400);
+            // } else {
+            //     show_menu(fs, &current_dir.entry, selected_dirent->name);//name of file);
+            //     delay_ms(200);
+            // }
         
         }
         delay_ms(200); // Debounce
