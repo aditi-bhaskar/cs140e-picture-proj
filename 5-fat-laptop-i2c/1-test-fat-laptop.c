@@ -1,5 +1,5 @@
 // TODO 
-// 1. setup_directory_info (fills in glo values), determine_screen_content (fills array), display_file_navigation
+// 1. setup_directory_info (fills in global values), determine_screen_content (fills array), display_file_navigation
 //      ^ use these functions and printk debug why newly created files/dirs/duplications won't show up as soon as they're created
 
 // 2. make creating a file pretty, so it types exactly in the file, (and auto-scrolls)? --> 
@@ -92,6 +92,7 @@ void navigate_file_system(pi_dirent_t *directory);
 void start_screen(void);
 void setup_directory_info(pi_dirent_t *current_dir);
 int show_pbm_menu(void);
+void display_text(pi_file_t *file, const char *filename) ;
 
 //******************************************
 // FUNCTIONS!!
@@ -150,13 +151,18 @@ void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with
 }
 
 
+
+
+
+
+
     
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
-    display_clear();
-    display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
-    display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
-    display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
-    display_update();
+    // display_clear();
+    // display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
+    // display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
+    // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
+    // display_update();
 
     // TODO show file here!!
     printk("Reading file\n");
@@ -178,7 +184,13 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, filename, &new_file_contents);
 
-    delay_ms(600);
+    file = fat32_read(fs, directory, filename);
+    display_clear();
+    display_text(file, filename); // TODO MAKE COPY OF THIS FUNCTION WHICH 1. GOES TO BOTTOM and 2. SHOWS OUR MENU ON IT INSTEAD
+    display_update();
+
+
+    delay_ms(200);
 }
 
 
@@ -222,7 +234,7 @@ void create_file(pi_dirent_t *directory) {
 
     while(1) {
         printk("in create_file, waiting\n");
-        display_clear();
+        // display_clear();
         // display navigation hints
         display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
         display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
