@@ -390,13 +390,16 @@ static void write_cluster_chain(fat32_fs_t *fs, uint32_t start_cluster, uint8_t 
   //  This is the main "write" function we'll be using; the other functions
   //  will delegate their writing operations to this.
 
-
-  // CREDIT: Suze
-
   if (nbytes == 0) {
     if (trace_p) trace("write_cluster_chain: nbytes is 0, nothing to write\n");
     return;
   }
+
+  // // aditi edit for files->dir ??
+  // if (start_cluster < 2) {
+  //   panic("write_cluster_chain: Invalid start cluster %d", start_cluster);
+  //   return;
+  // }
 
   // ASSUME DATA IS A MULTIPLE OF CLUSTER SIZE
   // SUZE: edit to use beautiful min function
@@ -511,22 +514,117 @@ pi_dirent_t *fat32_create(fat32_fs_t *fs, pi_dirent_t *directory, char *filename
       fdir->attr = is_dir ? FAT32_DIR : FAT32_ARCHIVE;
       // set size
       fdir->file_nbytes = 0; // set to 0 all the time
-      // set cluster - sus ?? TODO CHECK is this how we handle the cluster correctly??
-      fdir->hi_start = 0;
-      fdir->lo_start = 0;
+      
+
+      
+      // aditi edit: new code!
+      // for directories, need to alloc a cluster
+      if (is_dir) { 
+        // Allocate a new cluster for the directory contents
+        uint32_t new_cluster = find_free_cluster(fs, 0);
+        if (new_cluster == 0) {
+          printk("Failed to allocate cluster for new directory\n");
+          return NULL;
+        }
+        
+        // Mark the cluster as the end of a chain
+        fs->fat[new_cluster] = LAST_CLUSTER;
+        
+        // Set the starting cluster in the directory entry
+        fdir->hi_start = (new_cluster >> 16) & 0xFFFF;
+        fdir->lo_start = new_cluster & 0xFFFF;
+        
+        // Initialize the directory cluster (clearing it)
+        uint32_t bytes_per_cluster = fs->sectors_per_cluster * boot_sector.bytes_per_sec;
+        uint8_t *empty_cluster = kmalloc(bytes_per_cluster);
+        memset(empty_cluster, 0, bytes_per_cluster);
+        
+        // Write the empty cluster
+        // uint32_t bytes_per_cluster = fs->sectors_per_cluster * boot_sector.bytes_per_sec;
+        write_cluster_chain(fs, new_cluster, empty_cluster, bytes_per_cluster);
+        // kfree(empty_cluster);
+      } 
+      
+      // For files, start with no clusters
+      else {
+        
+        fdir->hi_start = 0;
+        fdir->lo_start = 0;
+      }
+ 
       break;
     }
   }
 
-  if (dir_found == -1) {panic("dir_found NOT FOUND!");}
+  // // aditi edit: extend the dir if it doesn't have space for another file
+  // if (dir_found == -1) {
+  //   // No free directory entry found, need to extend the directory
+  //   printk("No free directory entries, extending directory to new cluster\n");
+    
+  //   // Calculate current size of directory in bytes
+  //   uint32_t dir_size = dir_n * sizeof(fat32_dirent_t);
+    
+  //   // Calculate how many entries fit in one cluster
+  //   uint32_t bytes_per_cluster = fs->sectors_per_cluster * boot_sector.bytes_per_sec;
+  //   uint32_t entries_per_cluster = bytes_per_cluster / sizeof(fat32_dirent_t);
+    
+  //   // Allocate a new cluster worth of directory entries
+  //   uint32_t new_dir_n = dir_n + entries_per_cluster;
+  //   fat32_dirent_t *new_fat_dirents = kmalloc(new_dir_n * sizeof(fat32_dirent_t));
+    
+  //   // Copy existing entries
+  //   memcpy(new_fat_dirents, fat_dirents, dir_n * sizeof(fat32_dirent_t));
+    
+  //   // Initialize new entries as free
+  //   for (uint32_t i = dir_n; i < new_dir_n; i++) {
+  //       memset(&new_fat_dirents[i], 0, sizeof(fat32_dirent_t));
+  //       new_fat_dirents[i].filename[0] = 0xE5; // Mark as free
+  //   }
+    
+  //   // Now use the first new entry for our file
+  //   dir_found = dir_n; // Index of first new entry
+  //   fat32_dirent_t *fdir = &new_fat_dirents[dir_found];
+    
+  //   // Set up the entry
+  //   fat32_dirent_set_name(fdir, filename);
+  //   fdir->attr = is_dir ? FAT32_DIR : FAT32_ARCHIVE;
+  //   fdir->file_nbytes = 0;
+  //   fdir->hi_start = 0;
+  //   fdir->lo_start = 0;
+    
+  //   // Find a new cluster to extend the directory
+  //   uint32_t last_cluster = directory->cluster_id;
+    
+  //   // Find the end of the directory cluster chain
+  //   while (fat32_fat_entry_type(fs->fat[last_cluster]) != LAST_CLUSTER) {
+  //       last_cluster = fs->fat[last_cluster];
+  //   }
+    
+  //   // Allocate a new cluster
+  //   uint32_t new_cluster = find_free_cluster(fs, 0);
+    
+  //   // Link the last cluster to the new one
+  //   fs->fat[last_cluster] = new_cluster;
+  //   fs->fat[new_cluster] = LAST_CLUSTER;
+    
+  //   // Write the updated FAT to disk
+  //   write_fat_to_disk(fs);
+    
+  //   // Write the extended directory to the disk
+  //   write_cluster_chain(fs, directory->cluster_id, (uint8_t *)new_fat_dirents, new_dir_n * sizeof(fat32_dirent_t));
+    
+  //   // Free original dirents and update with new extended directory
+  //   fat_dirents = new_fat_dirents;
+  //   dir_n = new_dir_n;
+  // }
 
   // TODO: write out the updated directory to the disk
   // joe comment: [do the math] figure out sector num i of entry, and divide by number of sectors in cluster. then jst write back that specific cluster
   // figure out which sector and just write that one back
   write_fat_to_disk(fs);
 
+  printk("dir cluster id is : %d\n", directory->cluster_id);
   write_cluster_chain(fs, directory->cluster_id, (uint8_t *)fat_dirents, dir_n * sizeof(fat32_dirent_t));
-
 
   // fat32_dirent_t *dir_check = get_dirents(fs, directory->cluster_id, &dir_n);
   // printk(">>>>Debug: Checking directory after writing, found entries=%d\n", dir_n);
