@@ -94,6 +94,8 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
     display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
     display_update();
+
+    // TODO show file here!!
     
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
@@ -106,7 +108,7 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     printk("data contents = %s\n\n", data);
 
     pi_file_t new_file_contents = (pi_file_t) {
-        .data = data, // should technically be appending to the old file's txt. do this next
+        .data = data,
         .n_data = strlen(data),
         .n_alloc = strlen(data),
     };
@@ -122,14 +124,18 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
 
 void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
-    // create a file; name it a random number like demo_{num}
-    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
-    unique_file_id++;
-
     ls(fs, directory);
 
     // doesn't create file if file alr exists
-    pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+    pi_dirent_t *created_file;
+    do {
+        // create a file; name it a random number like demoLETTER
+        char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
+        unique_file_id++;
+
+        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+
+    } while (created_file == NULL);
     
     delay_ms(400);
 
