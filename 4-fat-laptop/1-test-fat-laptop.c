@@ -575,7 +575,6 @@ void determine_what_to_show(char **text, size_t buffer_size) {
         filtered_index++;
         real_index++;
     }
-    printk("what will be shown: %s", text_to_display);
 }
 
 void display_file_navigation(ext_dirent_t *current_dir, char **text) {
@@ -616,7 +615,6 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Main file browser loop
     while(1) {
         determine_what_to_show(&text_ptr, 18 * NUM_ENTRIES_TO_SHOW + 1); // fills in text_to_display via text_ptr
-
         display_file_navigation(&current_dir, &text_ptr);
 
         // Wait for button input
@@ -645,20 +643,6 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             delay_ms(200); // Debounce
         }
         else if (!gpio_read(input_right)) {
-            // unsure if i still need this
-            // int real_selected_index = 0;
-            // int count = 0;
-            // for (int i = 0; i < total_entries; i++) {
-            //     if (files.dirents[i].name[0] == '.') {
-            //         continue;  // Skip entries that start with .
-            //     }
-            //     if (count == selected_index) {
-            //         real_selected_index = i;
-            //         break;
-            //     }
-            //     count++;
-            // }
-
             // Get the selected directory entry
             pi_dirent_t *selected_dirent = &files.dirents[selected_index];
             
@@ -685,7 +669,6 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 // It's a file - display its content
                 display_file(fs, &current_dir.entry, selected_dirent);
             }
-            delay_ms(200); // Debounce
         }
         else if (!gpio_read(input_bottom)) { // scroll down
             if (selected_index < adjusted_total - 1) {
@@ -708,12 +691,11 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                     top_index--;
                 }
             }
-            delay_ms(200); // Prevent rapid scrolling
         }
         else if (!gpio_read(input_single)) {
             show_menu(fs, &current_dir.entry);
-            delay_ms(200); // Debounce
         }
+        delay_ms(200); // Debounce
     }
 }
 
