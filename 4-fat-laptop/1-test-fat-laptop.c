@@ -299,7 +299,7 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
 
         // control info
         display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
-        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Do *:Exit", WHITE, BLACK, 1);
+        display_write(4, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Do *:Exit", WHITE, BLACK, 1);
 
         display_update();
 
