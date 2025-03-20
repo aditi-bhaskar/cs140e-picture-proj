@@ -1,5 +1,6 @@
 // TODO 
 // remove files / more on menu
+
 #include "display.c"
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
@@ -20,7 +21,8 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
-char unique_folder_id = 65; // starts at: "A" // used when creating files
+char unique_folder_id = 65; // starts at: "A" // used when creating dirs
+char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
 fat32_fs_t fs;
@@ -116,17 +118,46 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     };
 
     printk("writing to fat\n");
-
     int writ = fat32_write(fs, directory, filename, &new_file_contents);
-    printk("wrote *prefetch flush* to file: %s\n", filename);
-    
-    delay_ms(600);
 
+    delay_ms(600);
 }
 
+void dup_file(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
+    ls(fs, directory);
 
-void dup_file(fat32_fs_t *fs, pi_dirent_t *directory) {
-    delay_ms (10);
+
+    
+    pi_dirent_t *created_file = NULL;
+    char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
+    do {
+        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+        filename[4] = unique_dup_id++; // make sure we create a new file!!
+    } while (created_file == NULL);
+
+    printk(">>DUPLICATING FILE %s", filename);
+
+    printk("Reading file\n");
+    pi_file_t *file = fat32_read(fs, directory, filename);
+    char *data = file->data;
+
+    pi_file_t new_file_contents = (pi_file_t) {
+        .data = data,
+        .n_data = strlen(data),
+        .n_alloc = strlen(data),
+    };
+
+    printk("writing to fat\n");
+
+    printk(">>DUPLICATING FILE %s", filename);
+    ls(fs, directory);
+
+    int writ = fat32_write(fs, directory, filename, &new_file_contents);
+    
+
+    ls(fs, directory);
+
+    delay_ms(400);
 }
 
 void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
@@ -278,7 +309,7 @@ void display_interactive_pbm(pi_file_t *file, const char *filename) {
 }
 
 
-void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
+void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) {
 
     printk(" in show menu! \n\n");
     delay_ms(400);
@@ -314,7 +345,7 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
                     create_dir(fs, directory);
                     break;
                 default:
-                    dup_file(fs, directory);
+                    dup_file(fs, directory, raw_name);
                     break;
             }
             delay_ms(200);
@@ -717,7 +748,7 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
         }
         else if (!gpio_read(input_single)) {
-            show_menu(fs, &current_dir.entry);
+            show_menu(fs, &current_dir.entry, current_dir.entry.raw_name);
         }
         delay_ms(200); // Debounce
     }
