@@ -12,7 +12,7 @@
 
 ### Team Contributions:
  - Aditi: Led hardware design, i2c bitbanged, file and dir create/duplicate
- - Suze: Led fat32, file navigation, pbm open and edit, ui + design
+ - Suze: Led fat32, file navigation, pbm & txt open & edit, ui + design
  - Together: Wrote display, built/soldered "laptop", fat32
 
 ### Citations:
