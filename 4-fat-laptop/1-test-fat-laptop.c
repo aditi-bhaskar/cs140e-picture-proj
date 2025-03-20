@@ -1,7 +1,5 @@
 // TODO 
-// create file
-// add to file (append)
-// remove files
+// remove files / more on menu
 
 
 #include "rpi.h" // automatically includes gpio, fat32 stuff
@@ -61,7 +59,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
 //******************************************
 
 void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
-
+void start_screen(void) ;
 //******************************************
 // FUNCTIONS!!
 //******************************************
@@ -126,7 +124,7 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
     // doesn't create file if file alr exists
     pi_dirent_t *created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
     
-    delay_ms(200);
+    delay_ms(400);
 
     while(1) {
         printk("in create_file, waiting\n");
@@ -144,7 +142,7 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
             break;
         }
 
-        // TODO display this stuff on screen
+        // TODO display this stuff on screen ??
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
@@ -161,6 +159,84 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
     }
 }
 
+
+/**
+ * Display and interact with a PBM image with drawing capability
+ */
+void display_interactive_pbm(pi_file_t *file, const char *filename) {
+    
+    // Initial display of the image
+    display_draw_pbm((uint8_t*)file->data, file->n_data);
+    
+    // Show file name at the top
+    display_write(10, 0, filename, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+    
+    // Reset cursor and drawing mode
+    cursor_x = 0;
+    cursor_y = 12;  // Just below the header
+    drawing_mode = DRAWING_MODE_OFF;
+    
+    // Initial drawing status
+    display_show_drawing_status(drawing_mode);
+    
+    // Draw initial cursor
+    display_draw_cursor(cursor_x, cursor_y, drawing_mode);
+    display_update();
+    
+    // Control loop
+    while(1) {
+        // Wait for a button press
+        // while(gpio_read(input_left) && gpio_read(input_right) && 
+        //       gpio_read(input_top) && gpio_read(input_bottom) && 
+        //       gpio_read(input_single)) {
+        //     delay_ms(20);
+        // }
+        delay_ms(100); // maybe helps?
+        
+        // Process button inputs
+        if (!gpio_read(input_left)) {
+            if (drawing_mode == DRAWING_MODE_OFF) {
+                // in navigate mode: Exit image view
+                delay_ms(200); // Debounce
+                return;
+            } else {
+                // Move cursor left in drawing mode
+                if (cursor_x > 0) cursor_x -= cursor_speed;
+            }
+        }
+        else if (!gpio_read(input_right)) {
+            // Move cursor right
+            if (cursor_x < SSD1306_WIDTH - 1) cursor_x += cursor_speed;
+        }
+        else if (!gpio_read(input_top)) {
+            // Move cursor up
+            if (cursor_y > 10) cursor_y -= cursor_speed;  // Stay below header
+        }
+        else if (!gpio_read(input_bottom)) {
+            // Move cursor down
+            if (cursor_y < SSD1306_HEIGHT - 17) cursor_y += cursor_speed; // Stay above status
+        }
+        else if (!gpio_read(input_single)) {
+            drawing_mode = !drawing_mode;
+            display_show_drawing_status(drawing_mode);
+            
+            // Debounce
+            //delay_ms(150);
+        }
+        
+        // Update cursor
+        display_draw_cursor(cursor_x, cursor_y, drawing_mode);
+        display_update();
+        
+        // Wait for button release
+        // while(!gpio_read(input_left) || !gpio_read(input_right) || 
+        //       !gpio_read(input_top) || !gpio_read(input_bottom) || 
+        //       !gpio_read(input_single)) {
+        //     delay_ms(20);
+        // }
+    }
+}
 
 
 void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
@@ -223,44 +299,10 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
 
     // Check if this is a PBM file
     if (is_pbm_file(file_dirent->name)) {
-        // Display PBM image
-        trace("trying to display PBM\n");
-        display_draw_pbm((uint8_t*)file->data, file->n_data);
-        
-        // Show file name at the top
-        display_write(10, 0, file_dirent->name, WHITE, BLACK, 1);
-        display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
-        
-        // Show navigation help
-        display_write(0, SSD1306_HEIGHT - 8, "<:Back", WHITE, BLACK, 1);
-        display_update();
-        
-        // Wait for button inputs in a loop specific to image viewing
-        while(1) {
-            // Wait for a button press
-            while(gpio_read(input_left) && gpio_read(input_right) && 
-                  gpio_read(input_top) && gpio_read(input_bottom) && 
-                  gpio_read(input_single)) {
-                delay_ms(50);
-            }
-            
-            // Check if back button was pressed
-            if (!gpio_read(input_left)) {
-                // Exit file view 
-                delay_ms(200); // Debounce
-                return;
-            }
-            
-            // Add additional image navigation controls here if needed
-            // For example: zoom in/out, pan, etc.
-            
-            // Wait for button release
-            while(!gpio_read(input_left) || !gpio_read(input_right) || 
-                  !gpio_read(input_top) || !gpio_read(input_bottom) || 
-                  !gpio_read(input_single)) {
-                delay_ms(50);
-            }
-        }
+        // Display PBM image with interactive drawing capability
+        trace("trying to display PBM with drawing capability\n");
+        display_interactive_pbm(file, file_dirent->name);
+        return; // Return directly after interactive mode
     }
     else {
         // For text files, proceed with regular text viewing...
@@ -378,7 +420,6 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
         }
     }
 }
-
 
 
 
@@ -556,8 +597,9 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 selected_index = 0;  // Reset selection
                 top_index = 0;       // Reset view position
             } else {
-                // At root, so exit the file browser
-                trace("exiting file system");
+                // At root, so
+                start_screen(); // go back to the start screen
+                // trace("exiting file system");
                 return;
             }
             delay_ms(200); // Debounce
@@ -651,53 +693,8 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
 
 
 
-
-
-void notmain(void) {
-    trace("Starting Button + Display Integration Test\n");
-
-    // display init 
-    trace("Initializing display at I2C address 0x%x\n", SSD1306_I2C_ADDR);
-    display_init();
-    trace("Display initialized\n");
-    
-    // Clear the display
-    display_clear();
-    display_update();
-    trace("Display cleared\n");
-
-    // button init
-    trace("Initializing buttons\n");
-
-    // do in the middle in case some interference
-    gpio_set_input(input_single);
-    gpio_set_input(input_right);
-    gpio_set_input(input_bottom);
-    gpio_set_input(input_top);
-    gpio_set_input(input_left);
-    trace("buttons initialized\n");
-    //test_buttons();
-
-    // Initialize FAT32 filesystem
-    trace("Starting FAT shenanigans\n");
-    kmalloc_init(FAT32_HEAP_MB);
-    pi_sd_init();
-  
-    trace("Reading the MBR\n");
-    mbr_t *mbr = mbr_read();
-  
-    trace("Loading the first partition\n");
-    mbr_partition_ent_t partition;
-    memcpy(&partition, mbr->part_tab1, sizeof(mbr_partition_ent_t));
-    assert(mbr_part_is_fat32(partition.part_type));
-  
-    trace("Loading the FAT\n");
-    fat32_fs_t fs = fat32_mk(&partition);
-  
-    trace("Loading the root directory\n");
-    pi_dirent_t root = fat32_get_root(&fs);
-  
-    // Display welcome screen with bouncing Pi symbol animation
+void start_screen(void) {
+    // Display welcome screen with bouncing ? symbol animation
     int bounce_x = SSD1306_WIDTH / 2;
     int bounce_y = 30;
     int dx = 1;
@@ -740,6 +737,42 @@ void notmain(void) {
         frame++;
         delay_ms(50);  // Control animation speed
     }
+}
+
+
+
+
+void notmain(void) {
+    trace("Initializing display at I2C address 0x%x\n", SSD1306_I2C_ADDR);
+    display_init();
+    trace("Display initialized\n");
+    display_clear();
+    display_update();
+
+    gpio_set_input(input_single);
+    gpio_set_input(input_right);
+    gpio_set_input(input_bottom);
+    gpio_set_input(input_top);
+    gpio_set_input(input_left);
+    //test_buttons();
+    trace("buttons initialized\n");
+
+    trace("Starting FAT shenanigans\n");
+    kmalloc_init(FAT32_HEAP_MB);
+    pi_sd_init();
+    trace("Reading the MBR\n");
+    mbr_t *mbr = mbr_read();
+    trace("Loading the first partition\n");
+    mbr_partition_ent_t partition;
+    memcpy(&partition, mbr->part_tab1, sizeof(mbr_partition_ent_t));
+    assert(mbr_part_is_fat32(partition.part_type));
+    trace("Loading the FAT\n");
+    fat32_fs_t fs = fat32_mk(&partition);
+    trace("Loading the root directory\n");
+    pi_dirent_t root = fat32_get_root(&fs);
+  
+    // shows cute start screen stuff
+    start_screen();
     
     delay_ms(200); // Debounce
     

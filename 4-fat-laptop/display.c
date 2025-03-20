@@ -492,3 +492,62 @@ void display_draw_pbm(const uint8_t *pbm_data, uint16_t size) {
     // Update the display with the rendered image
     display_update();
 }
+
+// ----------- DRAWING STUFF -----------
+// Drawing mode constants
+#define DRAWING_MODE_OFF  0
+#define DRAWING_MODE_ON   1
+
+// Drawing cursor position and state
+static int cursor_x = 0;     // Start at top-left of the image area
+static int cursor_y = 12;    // Just below the header line
+static int drawing_mode = DRAWING_MODE_OFF;
+static int cursor_speed = 1;  // Pixels to move per button press
+
+/**
+ * Draw the cursor at the current position
+ * In drawing mode, cursor is smaller to better indicate single-dot placement
+ */
+void display_draw_cursor(int x, int y, int drawing) {
+    // Size of the cursor
+    int cursor_size = drawing ? 1 : 2;
+    
+    // Draw a crosshair cursor (always just show position, don't draw automatically)
+    // Make it smaller in drawing mode for more precise positioning
+    
+    // Horizontal line
+    for (int i = -cursor_size; i <= cursor_size; i++) {
+        if (x + i >= 0 && x + i < SSD1306_WIDTH) {
+            display_set_pixel(x + i, y, INVERSE);
+        }
+    }
+    
+    // Vertical line
+    for (int i = -cursor_size; i <= cursor_size; i++) {
+        if (y + i >= 0 && y + i < SSD1306_HEIGHT) {
+            display_set_pixel(x, y + i, INVERSE);
+        }
+    }
+}
+
+/**
+ * Update the display to show drawing status
+ */
+void display_show_drawing_status(int drawing_mode) {
+    // Prepare drawing mode indicator
+    char status[20];
+    snprintk(status, sizeof(status), "Mode: %s", 
+             drawing_mode ? "DRAWING" : "NAVIGATE");
+    
+    // Draw a filled rectangle to clear the status area
+    display_fill_rect(0, SSD1306_HEIGHT - 16, SSD1306_WIDTH, 8, BLACK);
+    
+    // Display the status and controls
+    display_write(0, SSD1306_HEIGHT - 16, status, WHITE, BLACK, 1);
+    
+    if (drawing_mode) {
+        display_write(0, SSD1306_HEIGHT - 8, "*:NavigateMode ^v<>:Move", WHITE, BLACK, 1);
+    } else {
+        display_write(0, SSD1306_HEIGHT - 8, "<:Back *:DrawMode ^v<>:Move", WHITE, BLACK, 1);
+    }
+}
