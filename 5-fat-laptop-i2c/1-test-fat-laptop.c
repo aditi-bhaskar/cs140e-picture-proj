@@ -11,8 +11,6 @@
 
 // 5. make duplicate file accessible; inside the text file
 
-// 6. remove extra comments + make nicer summative comments
-
 
 #include "display.c"
 
@@ -197,18 +195,6 @@ void create_dir(pi_dirent_t *directory) {
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
     } while (created_folder == NULL);
 
-    // TODO ADD THIS STUFF TO CREATE THE FOLDER
-    // created_folder = 
-    //     char name[16], raw_name[16];
-    //     uint32_t cluster_id, is_dir_p, nbytes;
-    //   } pi_dirent_t;
-
-    //   typedef struct {
-    //     char *data;
-    //     size_t n_alloc,    // total bytes allocated.
-    //            n_data;     // how many bytes of data
-    //   } pi_file_t;
-
     display_clear();
     // Display navigation hints
     display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
@@ -238,7 +224,7 @@ void create_file(pi_dirent_t *directory) {
     while(1) {
         printk("in create_file, waiting\n");
         display_clear();
-        // Display navigation hints
+        // display navigation hints
         display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
         display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
         display_update();
@@ -251,7 +237,7 @@ void create_file(pi_dirent_t *directory) {
             break;
         }
 
-        // TODO display this stuff on screen ??
+        // TODO display this stuff on screen as im writing???
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
@@ -311,7 +297,7 @@ int show_pbm_menu(void) {
         }
         
         if (!gpio_read(input_right)) {
-            // Select this option
+            // select
             return selected_item;
         }
         else if (!gpio_read(input_bottom)) {
@@ -323,7 +309,7 @@ int show_pbm_menu(void) {
             delay_ms(150);
         }
         else if (!gpio_read(input_single)) {
-            // Cancel - return to previous screen without action
+            // return to prev screen
             return 0;
         }
     }
@@ -333,117 +319,108 @@ int show_pbm_menu(void) {
  * Display PBM file with editing capabilities
  */
 void display_pbm(pi_file_t *file, const char *filename) {
-    // Initial display of the image
+    // display image + header info
     display_draw_pbm((uint8_t*)file->data, file->n_data);
-    
-    // Create a copy of the display buffer for editing
+    display_write(10, 0, filename, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+
+    // copy display buf for edits
     static uint8_t edit_buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8];
     memcpy(edit_buffer, buffer, sizeof(edit_buffer));
     
-    // Show file name at the top
-    display_write(10, 0, filename, WHITE, BLACK, 1);
-    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
-    
-    // Reset cursor and drawing mode
+    // reset cursor and turn drawing mode off
     cursor_x = 0; 
     cursor_y = 12;
     drawing_mode = DRAWING_MODE_OFF;
     
-    // Calculate the boundary for cursor movement
-    int bottom_boundary = SSD1306_HEIGHT - 20; // Increased margin to stay above status area
+    // bounds check for cursor
+    int bottom_boundary = SSD1306_HEIGHT - 20; // margin to stay above status area
     
-    // Initial drawing status
+    // show status of drawing & the cursor
     display_show_drawing_status(drawing_mode);
-    
-    // Draw initial cursor
     display_draw_cursor(cursor_x, cursor_y, drawing_mode);
     display_update();
     
-    // Control loop
+    // i/o loop
     while(1) {
         delay_ms(100);
         
         int cursor_moved = 0;
         
-        // Process button inputs for cursor movement
         if (!gpio_read(input_left)) {
-            // Move cursor left
+            // move left
             if (cursor_x > 0) {
                 cursor_x -= cursor_speed;
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_right)) {
-            // Move cursor right
+            // move right
             if (cursor_x < SSD1306_WIDTH - 1) {
                 cursor_x += cursor_speed;
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_top)) {
-            // Move cursor up
-            if (cursor_y > 10) { // Stay below header
+            // move up
+            if (cursor_y > 10) { // bounds check for header
                 cursor_y -= cursor_speed;  
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_bottom)) {
-            // Move cursor down with boundary check
-            if (cursor_y < bottom_boundary) {
+            // move down 
+            if (cursor_y < bottom_boundary) { // bounds check for bottom
                 cursor_y += cursor_speed;
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_single)) {
-            // Show menu
+            // show menu
             int choice = show_pbm_menu();
             
             switch(choice) {
-                case 1: // Navigate mode
+                case 1: //  navigate mode (not drawing, but can move cursor)
                     drawing_mode = DRAWING_MODE_OFF;
                     break;
                     
-                case 2: // Draw mode
+                case 2: // enter draw mode
                     drawing_mode = DRAWING_MODE_ON;
                     break;
                     
-                case 3: // Exit file
+                case 3: // save and quit file
                     return;
                     
                 default:
                     break;
             }
             
-            // Redraw the screen after menu selection
+            // redraw screen after menu selection
             memcpy(buffer, edit_buffer, sizeof(buffer));
-            display_write(10, 0, filename, WHITE, BLACK, 1);
-            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
             display_show_drawing_status(drawing_mode);
             display_draw_cursor(cursor_x, cursor_y, drawing_mode);
             display_update();
             
             delay_ms(150);
-            continue; // Skip to next iteration
+            continue; // skip to next iteration and dont check other if statements below
         }
         
-        // If cursor moved and in drawing mode, draw a pixel
+        // cursor moved while in drawing mode --> draw a pixel
         if (cursor_moved && drawing_mode) {
             uint16_t byte_idx = cursor_x + (cursor_y / 8) * SSD1306_WIDTH;
             uint8_t bit_pos = cursor_y % 8;
-            edit_buffer[byte_idx] |= (1 << bit_pos);  // Set pixel to WHITE
+            edit_buffer[byte_idx] |= (1 << bit_pos); // while pixel
         }
         
-        // Only redraw if position changed
+        // only redraw cursor position if cursor position changed
         if (cursor_moved) {
-            // Restore the buffer from our edit buffer
+            // restore the buffer from our edit buffer
             memcpy(buffer, edit_buffer, sizeof(buffer));
             
-            // Draw the header again
-            display_write(10, 0, filename, WHITE, BLACK, 1);
-            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+            // redraw the header again
             display_show_drawing_status(drawing_mode);
             
-            // Draw cursor at new position
+            // redraw cursor at new pos
             display_draw_cursor(cursor_x, cursor_y, drawing_mode);
             display_update();
         }
@@ -508,30 +485,30 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
 }
 
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines) {
-    // Preprocess the file into screen-friendly lines
-    // First, count approximately how many lines we'll need
+
+    // count num lines
     int *line_positions = *line_positions_ptr;
-    // Allocate memory for line start positions
+    // alloc for line start positions
     int line_count = 0;
     
-    // Process the entire file to find line breaks
+    // find linebreaks in file
     int pos = 0;
     int chars_in_line = 0;
     
-    // Mark the start of the first line
+    // mark start of the first line
     line_positions[line_count++] = 0;
     
-    // Scan through the file to find line breaks
+    // scan thru file to find line breaks
     while (pos < file->n_data && line_count < estimated_lines - 1) {
         char c = file->data[pos];
         
-        // Skip carriage returns
+        // skip \r carriage returns
         if (c == '\r') {
             pos++;
             continue;
         }
         
-        // Handle existing newlines in the file
+        // handle \n
         if (c == '\n') {
             // Mark the start of a new line
             line_positions[line_count++] = pos + 1;
@@ -542,10 +519,10 @@ int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines
         
         chars_in_line++;
         
-        // Check if we need to wrap this line - simply cut at the maximum character count
+        // check if we need to wrap this line - simply cut at the maximum character count
         if (chars_in_line >= MAX_CHARS_PER_LINE) {
-            // Force a break at the current position, splitting words if necessary
-            line_positions[line_count++] = pos + 1;  // Start new line at next character
+            // force break at cur pos, spliting words if needed
+            line_positions[line_count++] = pos + 1;  // start new line at next character
             chars_in_line = 0;
         }
         
@@ -558,7 +535,7 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
     char *display_buffer = *text;
     display_buffer[0] = '\0';
     int buf_pos = 0;
-    int lines_displayed = 0;  // Track how many actual lines we've displayed
+    int lines_displayed = 0;  // track how many actual lines we've displayed
     
     for (int i = 0; i < lines_per_screen && (current_start_line + i) < line_count; i++) {
         int line_start = line_positions[current_start_line + i];
@@ -570,10 +547,10 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
             line_end = file->n_data;
         }
         
-        // Copy line content, including any newlines
+        // copy line content, including any newlines
         for (int j = line_start; j < line_end && buf_pos < buffer_size - 2; j++) {
             char c = file->data[j];
-            if (c != '\r') {  // Skip carriage returns
+            if (c != '\r') {  // skip \r = carriage returns
                 display_buffer[buf_pos++] = c;
                 if (c == '\n') {
                     lines_displayed++;
@@ -581,7 +558,7 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
             }
         }
         
-        // If the line didn't end with a newline and it's not the last line we're displaying,
+        // of the line didn't end with a newline and it's not the last line we're displaying,
         // add a newline
         if ((buf_pos == 0 || display_buffer[buf_pos-1] != '\n') && 
             i < lines_per_screen - 1 && buf_pos < buffer_size - 2) {
@@ -590,24 +567,25 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
         }
     }
     
-    // Ensure null termination
+    // null termination!!
     display_buffer[buf_pos] = '\0';
 }
 
 
+
 void display_file_text(const char *filename, char **text, int line_count) {
     char *display_buffer = *text;
-    // Display the content
+    // clear display
     display_clear();
         
-    // Show file name at the top
+    // write file name at the top 
     display_write(10, 0, filename, WHITE, BLACK, 1);
     display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
     
-    // Show the file content
+    // write file content
     display_write(0, 12, display_buffer, WHITE, BLACK, 1);
     
-    // Add scroll indicators if needed
+    // add scroll indicators if needed
     if (current_start_line > 0) {
         display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
     }
@@ -616,7 +594,7 @@ void display_file_text(const char *filename, char **text, int line_count) {
         display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
     }
     
-    // Add navigation help at bottom
+    // add navigation help at bottom
     display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
     display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
     
@@ -630,14 +608,14 @@ void display_text(pi_file_t *file, const char *filename) {
     int *line_positions = kmalloc(sizeof(int) * estimated_lines);
     int line_count = split_text_up(&line_positions, file, estimated_lines); // populates line_positions
     
-    // Buffer for the displayed text
+    // buf for displayed text
     char display_buffer[512];
     char *display_buffer_ptr = display_buffer;
     
-    // Initialize the starting line index (used for scrolling)
+    // init the starting line index (used for scrolling)
     current_start_line = 0;
     
-    // Main display loop
+    // display loop
     while (1) {
         determine_screen_content_file(&display_buffer_ptr, 512, file, line_positions, line_count);
 
@@ -883,17 +861,17 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
                 count++;
             }
 
-            // Get the selected directory entry
+            // get selected directory entry
             pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
             
             if (selected_dirent->is_dir_p) {
-                // Create a new extended directory entry with parent pointer
+                // create a new extended directory entry with parent pointer
                 ext_dirent_t* new_parent = kmalloc(sizeof(ext_dirent_t));
 
-                // Copy the current directory to be used as parent
+                // copy the current directory to be used as parent
                 *new_parent = current_dir;
 
-                // Create a new current directory with the selected entry
+                // create a new current directory with the selected entry
                 current_dir.entry = *selected_dirent;
                 current_dir.parent = new_parent;
                 setup_directory_info(&current_dir.entry);
@@ -913,18 +891,18 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
             if (selected_index < adjusted_total - 1) {
                 selected_index++;
                 
-                // Scroll if selection goes below visible area
+                // scroll if selection goes below visible area
                 if (selected_index > bot_index) {
                     top_index++;
                 }
             }
         }
         else if (!gpio_read(input_top)) { // scroll up
-            // Move selection up
+            // move selection up
             if (selected_index > 0) {
                 selected_index--;
                 
-                // Scroll if selection goes above visible area
+                // scroll if selection goes above visible area
                 if (selected_index < top_index) {
                     top_index--;
                 }
@@ -934,7 +912,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
             show_filesystem_menu(&(current_dir.entry)); // we don't need parent directory information
         
         }
-        delay_ms(200); // Debounce
+        delay_ms(200); // debounce
     }
 }
 
@@ -942,7 +920,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
 
 
 void start_screen(void) {
-    // Display welcome screen with bouncing ? symbol animation
+    // display welcome screen with bouncing ? symbol animation
     int bounce_x = SSD1306_WIDTH / 2;
     int bounce_y = 30;
     int dx = 1;

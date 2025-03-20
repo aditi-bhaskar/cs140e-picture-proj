@@ -197,18 +197,6 @@ void create_dir(pi_dirent_t *directory) {
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
     } while (created_folder == NULL);
 
-    // TODO ADD THIS STUFF TO CREATE THE FOLDER
-    // created_folder = 
-    //     char name[16], raw_name[16];
-    //     uint32_t cluster_id, is_dir_p, nbytes;
-    //   } pi_dirent_t;
-
-    //   typedef struct {
-    //     char *data;
-    //     size_t n_alloc,    // total bytes allocated.
-    //            n_data;     // how many bytes of data
-    //   } pi_file_t;
-
     display_clear();
     // Display navigation hints
     display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
