@@ -434,44 +434,44 @@ int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines
 
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count) {
     char *display_buffer = *text;
-    // Generate the text content for current view
     display_buffer[0] = '\0';
     int buf_pos = 0;
+    int lines_displayed = 0;  // Track how many actual lines we've displayed
     
-    // Collect lines_per_screen lines starting from current_start_line
     for (int i = 0; i < lines_per_screen && (current_start_line + i) < line_count; i++) {
         int line_start = line_positions[current_start_line + i];
         int line_end;
         
-        // Determine where this line ends
         if (current_start_line + i + 1 < line_count) {
             line_end = line_positions[current_start_line + i + 1];
-            // If next position is after a newline, don't include the newline twice
-            if (line_end > 0 && file->data[line_end-1] == '\n') {
-                line_end--;
-            }
         } else {
             line_end = file->n_data;
         }
         
-        // Copy the line content to the display buffer
+        // Copy line content, including any newlines
         for (int j = line_start; j < line_end && buf_pos < buffer_size - 2; j++) {
             char c = file->data[j];
             if (c != '\r') {  // Skip carriage returns
                 display_buffer[buf_pos++] = c;
+                if (c == '\n') {
+                    lines_displayed++;
+                }
             }
         }
         
-        // Add a newline if the line doesn't end with one already
-        if (buf_pos > 0 && display_buffer[buf_pos-1] != '\n' && i < lines_per_screen - 1 && 
-            buf_pos < buffer_size - 2) {
+        // If the line didn't end with a newline and it's not the last line we're displaying,
+        // add a newline
+        if ((buf_pos == 0 || display_buffer[buf_pos-1] != '\n') && 
+            i < lines_per_screen - 1 && buf_pos < buffer_size - 2) {
             display_buffer[buf_pos++] = '\n';
+            lines_displayed++;
         }
     }
     
     // Ensure null termination
     display_buffer[buf_pos] = '\0';
 }
+
 
 void display_file_text(const char *filename, char **text, int line_count) {
     char *display_buffer = *text;
@@ -798,7 +798,6 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
                     top_index++;
                 }
             }
-            delay_ms(150); // Prevent rapid scrolling
         }
         else if (!gpio_read(input_top)) { // scroll up
             // Move selection up
