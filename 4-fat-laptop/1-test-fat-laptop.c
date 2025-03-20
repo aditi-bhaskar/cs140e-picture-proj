@@ -97,34 +97,50 @@ void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
 }
 
 
-void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename, char* append_me) {   
+void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
     display_clear();
     display_write(10, 0, "Appending to file", WHITE, BLACK, 1);
     display_write(10, 20, origin_filename, WHITE, BLACK, 1); // say which file
     display_write(10, 30, dest_filename, WHITE, BLACK, 1); // say which file
-    display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
+    // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
     display_update();
 
     // TODO show file here!!
 
-    printk(">>!!! origin file name = %s\n\n", origin_filename);
-    printk(">>!!! file name = %s\n\n", dest_filename);
+    printk("\n\n\n\n\n>>!!! origin file name = %s\n\n", origin_filename);
+    printk("\n\n\n\n\n\n>>!!! file name = %s\n\n", dest_filename);
 
-    printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, origin_filename);
-    // char *data = file->data;
-
-    // pi_file_t new_file_contents = (pi_file_t) {
-    //     .data = data,
-    //     .n_data = strlen(data),
-    //     .n_alloc = strlen(data),
-    // };
-
+    printk("file -> data is %s\n\n", file->data);
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, dest_filename, file);
 
     delay_ms(600);
 }
+
+
+void dup_file(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
+    ls(fs, directory);
+    
+    pi_dirent_t *created_file = NULL;
+    char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
+    do {
+        filename[4] = unique_dup_id; // make sure we create a new file!!
+        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+        unique_dup_id++; // if needed for the next loop/iteration
+    } while (created_file == NULL);
+
+    printk(">>DUPLICATING FILE %s", filename);
+    delay_ms(2000);
+
+    copy_file_contents(fs, directory, raw_name, filename); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
+
+    ls(fs, directory);
+
+    delay_ms(400);
+}
+
+
     
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
     display_clear();
@@ -134,7 +150,6 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     display_update();
 
     // TODO show file here!!
-    
     printk(">>!!! file name = %s\n\n", filename);
 
     printk("Reading file\n");
@@ -159,43 +174,6 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     delay_ms(600);
 }
 
-void dup_file(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
-    ls(fs, directory);
-    
-    pi_dirent_t *created_file = NULL;
-    char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
-    do {
-        filename[4] = unique_dup_id; // make sure we create a new file!!
-        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
-        unique_dup_id++; // if needed for the next loop/iteration
-    } while (created_file == NULL);
-
-    printk(">>DUPLICATING FILE %s", filename);
-    delay_ms(2000);
-
-    copy_file_contents(fs, directory, raw_name, filename, ""); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
-    // printk("Reading file\n");
-    // pi_file_t *file = fat32_read(fs, directory, filename);
-    // char *data = file->data;
-
-    // pi_file_t new_file_contents = (pi_file_t) {
-    //     .data = data,
-    //     .n_data = strlen(data),
-    //     .n_alloc = strlen(data),
-    // };
-
-    // printk("writing to fat\n");
-
-    // printk(">>DUPLICATING FILE %s", filename);
-    // ls(fs, directory);
-
-    // int writ = fat32_write(fs, directory, filename, &new_file_contents);
-    
-
-    ls(fs, directory);
-
-    delay_ms(400);
-}
 
 void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
     ls(fs, directory);
@@ -346,7 +324,7 @@ void display_interactive_pbm(pi_file_t *file, const char *filename) {
 }
 
 
-void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) {
+void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
 
     printk(" in show menu! \n\n");
     delay_ms(400);
@@ -382,7 +360,7 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) {
                     create_dir(fs, directory);
                     break;
                 default:
-                    dup_file(fs, directory, raw_name);
+                    dup_file(fs, directory, filename);
                     break;
             }
             delay_ms(200);
@@ -858,18 +836,17 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         }
         else if (!gpio_read(input_right)) {
             int real_selected_index = 0;
-             int count = 0;
-             for (int i = 0; i < total_entries; i++) {
-                 if (files.dirents[i].name[0] == '.') {
-                     continue;  // Skip entries that start with .
-                 }
-                 if (count == selected_index) {
-                     real_selected_index = i;
-                     break;
-                 }
-                 count++;
-             }
-
+            int count = 0;
+            for (int i = 0; i < total_entries; i++) {
+                if (files.dirents[i].name[0] == '.') {
+                    continue;  // Skip entries that start with .
+                }
+                if (count == selected_index) {
+                    real_selected_index = i;
+                    break;
+                }
+                count++;
+            }
 
             // Get the selected directory entry
             pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
@@ -920,7 +897,34 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
         }
         else if (!gpio_read(input_single)) {
-            show_menu(fs, &current_dir.entry, current_dir.entry.raw_name);
+
+            // TODO MAKE HELPER
+            int real_selected_index = 0;
+            int count = 0;
+            for (int i = 0; i < total_entries; i++) {
+                if (files.dirents[i].name[0] == '.') {
+                    continue;  // Skip entries that start with .
+                }
+                if (count == selected_index) {
+                    real_selected_index = i;
+                    break;
+                }
+                count++;
+            }
+
+            // Get the selected directory entry
+            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
+            
+            if (selected_dirent->is_dir_p) {
+                display_clear();
+                display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
+                display_update();
+                delay_ms(400);
+            } else {
+                show_menu(fs, &current_dir.entry, selected_dirent->name);//name of file);
+                delay_ms(200);
+            }
+        
         }
         delay_ms(200); // Debounce
     }
