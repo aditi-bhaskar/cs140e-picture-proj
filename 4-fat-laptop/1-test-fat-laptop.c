@@ -7,7 +7,11 @@
 
 // 3. save pbm edits to file!
 
-// 4. remove extra comments + make nicer summative comments
+// 4. test create folder + file rigorously
+
+// 5. make duplicate file accessible; inside the text file
+
+// 6. remove extra comments + make nicer summative comments
 
 
 #include "display.c"
