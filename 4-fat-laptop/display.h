@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 #include "i2c.h"
+#include "pi-sd.h"
+#include "fat32.h"
+#include "rpi.h" // automatically includes gpio, fat32 stuff
 
 // Display dimensions
 #define SSD1306_WIDTH  128
@@ -58,5 +61,10 @@ void display_command(uint8_t cmd);
 // PBM (=image) stuff
 void display_draw_pbm(const uint8_t *pbm_data, uint16_t size);
 int is_pbm_file(const char *filename);
+
+typedef struct {
+    pi_dirent_t entry;         // The actual directory entry
+    void* parent;              // Pointer to parent directory entry
+} ext_dirent_t;
 
 #endif // __DISPLAY_H__

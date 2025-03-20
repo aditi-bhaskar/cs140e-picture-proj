@@ -1,11 +1,7 @@
 // TODO 
 // remove files / more on menu
-
-
-#include "rpi.h" // automatically includes gpio, fat32 stuff
 #include "display.c"
-#include "pi-sd.h"
-#include "fat32.h"
+
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
 // suze wire colors: TODO
@@ -58,8 +54,8 @@ static uint32_t min(uint32_t a, uint32_t b) {
 // FUNCTION HEADERS!!
 //******************************************
 
-void show_files(fat32_fs_t *fs, pi_dirent_t *directory) ;
-void start_screen(void) ;
+void show_files(fat32_fs_t *fs, pi_dirent_t *directory);
+void start_screen(fat32_fs_t fs, pi_dirent_t root);
 //******************************************
 // FUNCTIONS!!
 //******************************************
@@ -160,9 +156,6 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 }
 
 
-/**
- * Display and interact with a PBM image with drawing capability
- */
 void display_interactive_pbm(pi_file_t *file, const char *filename) {
     
     // Initial display of the image
@@ -424,12 +417,10 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
 
 
 // Extended directory entry with parent pointer for navigation; funky but okay
-typedef struct {
-    pi_dirent_t entry;         // The actual directory entry
-    void* parent;              // Pointer to parent directory entry
-} ext_dirent_t;
-
-// Then, update the show_files function to use this extended structure:
+// typedef struct {
+//     pi_dirent_t entry;         // The actual directory entry
+//     void* parent;              // Pointer to parent directory entry
+// } ext_dirent_t;
 
 void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Constants for navigation
@@ -439,32 +430,36 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     ext_dirent_t current_dir;
     current_dir.entry = *starting_directory;
     current_dir.parent = NULL;  // Root has no parent
+
+    // for debug stuff
+    ls(fs, starting_directory);
     
     // Navigation state variables
     uint32_t top_index = 0;      // First visible entry index
     uint32_t selected_index = 0;  // Currently selected entry
     int entries_offset = 0;       // Offset for skipping special directories
+
+
+    // Read current directory contents; this setup happens everywhere
+    pi_directory_t files = fat32_readdir(fs, &current_dir.entry);
+    uint32_t total_entries = files.ndirents;
+    printk("Got %d files.\n", files.ndirents);
+    // Count how many entries start with . to calculate our offset (bc we don't show them)
+    entries_offset = 0;
+    for (int i = 0; i < total_entries; i++) {
+        pi_dirent_t *dirent = &files.dirents[i];
+        if (dirent->name[0] == '.') {
+            // Skip entries that start with . bc they are funky and somehow refer to cluster 0
+            entries_offset++;
+        }
+    }
+    
+    // Adjust total entries (excluding special directories)
+    uint32_t adjusted_total = total_entries - entries_offset;
+    
     
     // Main file browser loop
     while(1) {
-        // Read current directory contents
-        pi_directory_t files = fat32_readdir(fs, &current_dir.entry);
-        uint32_t total_entries = files.ndirents;
-
-        printk("Got %d files.\n", files.ndirents);
-        
-        // Count how many entries start with . to calculate our offset (bc we don't show them)
-        entries_offset = 0;
-        for (int i = 0; i < total_entries; i++) {
-            pi_dirent_t *dirent = &files.dirents[i];
-            if (dirent->name[0] == '.') {
-                // Skip entries that start with . bc they are funky and somehow refer to cluster 0
-                entries_offset++;
-            }
-        }
-        
-        // Adjusted total entries (excluding special directories)
-        uint32_t adjusted_total = total_entries - entries_offset;
         
         // Handle empty directories (after filtering)
         if (adjusted_total == 0) {
@@ -493,6 +488,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         int real_index = 0;  // Index into the actual directory entries
         int filtered_index = 0;  // Index into filtered entries (excluding '.' entries)
         
+        // determines which files to show
         while (filtered_index <= bot_index && real_index < total_entries) {
             pi_dirent_t *dirent = &files.dirents[real_index];
             
@@ -537,7 +533,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                     text_to_display[text_pos++] = '\n';
                 }
                 
-                // Ensure null termination
                 text_to_display[text_pos] = '\0';
             }
             filtered_index++;
@@ -546,8 +541,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         
         // Display current directory name and file list
         display_clear();
-        
-        // Prepare directory name display
         char dir_name[22]; // Limit to screen width
         if (current_dir.entry.name[0] == '\0') {
             safe_strcpy(dir_name, "Root Directory", sizeof(dir_name));
@@ -568,6 +561,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         } else {
             display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Exit >:Open", WHITE, BLACK, 1);
         }
+        display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE); // added by suze 
         
         display_update();
         delay_ms(100); // Debouncing delay
@@ -596,10 +590,24 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 current_dir = *parent_dir;
                 selected_index = 0;  // Reset selection
                 top_index = 0;       // Reset view position
+                files = fat32_readdir(fs, &current_dir.entry);
+                total_entries = files.ndirents;
+                printk("Got %d files.\n", files.ndirents);
+                // Count how many entries start with . to calculate our offset (bc we don't show them)
+                entries_offset = 0;
+                for (int i = 0; i < total_entries; i++) {
+                    pi_dirent_t *dirent = &files.dirents[i];
+                    if (dirent->name[0] == '.') {
+                        // Skip entries that start with . bc they are funky and somehow refer to cluster 0
+                        entries_offset++;
+                    }
+                }
+                
+                // Adjust total entries (excluding special directories)
+                uint32_t adjusted_total = total_entries - entries_offset;
+                
             } else {
-                // At root, so
-                start_screen(); // go back to the start screen
-                // trace("exiting file system");
+                // root directory; return to start screen
                 return;
             }
             delay_ms(200); // Debounce
@@ -647,6 +655,22 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 // Create a new current directory with the selected entry
                 current_dir.entry = *selected_dirent;
                 current_dir.parent = new_parent;
+                files = fat32_readdir(fs, &current_dir.entry);
+                total_entries = files.ndirents;
+                printk("Got %d files.\n", files.ndirents);
+                // Count how many entries start with . to calculate our offset (bc we don't show them)
+                entries_offset = 0;
+                for (int i = 0; i < total_entries; i++) {
+                    pi_dirent_t *dirent = &files.dirents[i];
+                    if (dirent->name[0] == '.') {
+                        // Skip entries that start with . bc they are funky and somehow refer to cluster 0
+                        entries_offset++;
+                    }
+                }
+                
+                // Adjust total entries (excluding special directories)
+                uint32_t adjusted_total = total_entries - entries_offset;
+                
                 
                 // Regular directory - navigate into it
                 display_clear();
@@ -693,7 +717,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
 
 
 
-void start_screen(void) {
+void start_screen(fat32_fs_t fs, pi_dirent_t root) {
     // Display welcome screen with bouncing ? symbol animation
     int bounce_x = SSD1306_WIDTH / 2;
     int bounce_y = 30;
@@ -701,9 +725,14 @@ void start_screen(void) {
     int dy = 1;
     int frame = 0;
     
-    while (gpio_read(input_single) && gpio_read(input_right) && 
-           gpio_read(input_bottom) && gpio_read(input_top) && 
-           gpio_read(input_left)) {
+    while (1) {
+        if(!gpio_read(input_left) || !gpio_read(input_right) || 
+              !gpio_read(input_top) || !gpio_read(input_bottom) || 
+              !gpio_read(input_single)) {
+                // someone pressed a button
+            show_files(&fs, &root);
+            delay_ms(200); // to make sure we don't immediately click into it
+        }
         
         display_clear();
         
@@ -772,16 +801,6 @@ void notmain(void) {
     pi_dirent_t root = fat32_get_root(&fs);
   
     // shows cute start screen stuff
-    start_screen();
-    
-    delay_ms(200); // Debounce
-    
-    // Start file browser
-    show_files(&fs, &root);
-    
-    // Exit message
-    display_clear();
-    display_write(10, 20, "File Browser Exited", WHITE, BLACK, 1);
-    display_update();
-    delay_ms(2000);
+    start_screen(fs, root);
+    // we should never return from here since there is a while (1) loop
 }
