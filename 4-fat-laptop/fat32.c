@@ -195,6 +195,8 @@ static fat32_dirent_t *get_dirents(fat32_fs_t *fs, uint32_t cluster_start, uint3
   // TODO: allocate a buffer large enough to hold the whole directory
   // WHAT SHOULD THIS BE??
   uint32_t amnt_alloc = cl_ch_len * boot_sector.sec_per_cluster * boot_sector.bytes_per_sec;
+  if (amnt_alloc == 0) return NULL;
+  // printk(">> amnt alloc is %d", amnt_alloc);
   uint8_t *data = kmalloc(amnt_alloc); 
 
   // TODO: read in the whole directory (see `read_cluster_chain`)
@@ -211,11 +213,21 @@ pi_directory_t fat32_readdir(fat32_fs_t *fs, pi_dirent_t *dirent) {
   demand(init_p, "fat32 not initialized!");
   demand(dirent->is_dir_p, "tried to readdir a file!");
   // TODO: use `get_dirents` to read the raw dirent structures from the disk
+
   uint32_t n_dirents;
   fat32_dirent_t *fat_dirents = get_dirents(fs, dirent->cluster_id, &n_dirents);
+  
+  if (fat_dirents == NULL) {
+    return (pi_directory_t) {
+      .dirents = NULL, // aditi edit
+      .ndirents = 0, // these are the valid pi_dirents I copied into pi_dirents
+    };
+  }
+
 
   // TODO: allocate space to store the pi_dirent_t return values
   // 16 dir entries in a sector. can be multiple sectors
+  if (n_dirents == 0) printk("NO DIRENTS!!!!!!!!!!! \n");
   pi_dirent_t *pi_dirents = kmalloc(n_dirents * sizeof(pi_dirent_t)); // TODO COME BACK!!
 
   // TODO: iterate over the directory and create pi_dirent_ts for every valid
@@ -472,8 +484,7 @@ pi_dirent_t *fat32_create(fat32_fs_t *fs, pi_dirent_t *directory, char *filename
   if (trace_p) trace("creating %s\n", filename);
   if (!fat32_is_valid_name(filename)) {printk("invalid fat32 file name!"); return NULL;} // NOTE: can't add _ in file name
 
-  // TODO: read the dirents and make sure there isn't already a file with the
-  // same name
+  // TODO: read the dirents and make sure there isn't already a file with the same name
 
   // check that the directory is actually a directory 
   if (!directory->is_dir_p) {printk("directory is not a dir NOT FOUND!\n"); return NULL;}
