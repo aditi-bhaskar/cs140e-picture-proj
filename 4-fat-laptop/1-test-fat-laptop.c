@@ -442,6 +442,20 @@ void setup_directory_info(ext_dirent_t *current_dir) {
     adjusted_total = total_entries - entries_offset;
     ls(&fs, &(current_dir->entry)); // debug stuff
 
+    // Handle empty directories (after filtering)
+    if (adjusted_total == 0) {
+        display_clear();
+        display_write(10, 20, "Empty directory", WHITE, BLACK, 1);
+        display_update();
+        delay_ms(1000);
+    }
+    
+    // Reset selection when entering a new directory
+    if (selected_index >= adjusted_total) {
+        selected_index = 0;
+        top_index = 0;
+    }
+
 }
 
 
@@ -457,22 +471,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     
     // Main file browser loop
     while(1) {
-        
-        // Handle empty directories (after filtering)
-        if (adjusted_total == 0) {
-            display_clear();
-            display_write(10, 20, "Empty directory", WHITE, BLACK, 1);
-            display_update();
-            delay_ms(1000);
-            continue;
-        }
-        
-        // Reset selection when entering a new directory
-        if (selected_index >= adjusted_total) {
-            selected_index = 0;
-            top_index = 0;
-        }
-        
         // Calculate visible range
         uint32_t bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, adjusted_total - 1);
         
@@ -656,7 +654,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
             delay_ms(200); // Debounce
         }
-        else if (!gpio_read(input_top)) { // for aditi hardware
+        else if (!gpio_read(input_top)) {
             // Move selection up
             if (selected_index > 0) {
                 selected_index--;
@@ -669,15 +667,7 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             delay_ms(200); // Prevent rapid scrolling
         }
         else if (!gpio_read(input_single)) {
-            // TODO: ADITI IS THIS WHAT SINGLE SHOULD DO???
-
             show_menu(fs, &current_dir.entry);
-                // Create a new file in current directory
-            // display_clear();
-            // display_write(5, 20, "Creating new file... (not implemented)", WHITE, BLACK, 1);
-            // display_update();
-            // delay_ms(500);
-            
             delay_ms(200); // Debounce
         }
     }
