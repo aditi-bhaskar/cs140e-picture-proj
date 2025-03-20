@@ -2,9 +2,6 @@
 // 1. setup_directory_info (fills in global values), determine_screen_content (fills array), display_file_navigation
 //      ^ use these functions and printk debug why newly created files/dirs/duplications won't show up as soon as they're created
 
-// 2. make creating a file pretty, so it types exactly in the file, (and auto-scrolls)? --> 
-//      can display instructions briefly, and then just type into file and display file??
-
 // 3. save pbm edits to file!
 
 // 4. test create folder + file rigorously
@@ -114,6 +111,10 @@ void ls(pi_dirent_t *directory) {
     }
 }
 
+//******************************************
+// CREATING FILES & DIRS
+//******************************************
+
 void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
     display_clear();
     display_write(10, 0, "Copying file", WHITE, BLACK, 1);
@@ -149,8 +150,6 @@ void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with
 
     delay_ms(400);
 }
-
-
 
 void display_file_text_while_appending(const char *filename, char **text, int line_count) {
     printk("displaying file while appending\n");
@@ -195,24 +194,17 @@ void display_text_while_appending(pi_file_t *file, const char *filename) {
     // init the starting line index (used for scrolling)
     current_start_line = 0;
     
-    while(1) {
-        printk("in while loop\n");
-        determine_screen_content_file(&display_buffer_ptr, 512, file, line_positions, line_count);
-        display_file_text_while_appending(filename, &display_buffer_ptr, line_count);
-
-        if( (current_start_line + lines_per_screen) < line_count ) {          
-            // Scroll down one line at a time
-            current_start_line++;
-            delay_ms(40); // show it scrolling every time very quickly ?? // todo maybe remove this
-        } else {
-            break;
-        }
-    }
+    while ( (current_start_line + lines_per_screen) < line_count ) {          
+        // Scroll down one line at a time
+        current_start_line++;
+    } 
+    determine_screen_content_file(&display_buffer_ptr, 512, file, line_positions, line_count);
+    display_file_text_while_appending(filename, &display_buffer_ptr, line_count);
+    
 }
     
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
 
-    // TODO show file here!!
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
 
@@ -245,11 +237,7 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     printk("fileread contents: %s", file_read->data);
     printk(".\n"); // incase prev line was empty spaces or smth
     display_text_while_appending(file_read, filename);    
-
-
-    // delay_ms(300);
 }
-
 
 void create_file(pi_dirent_t *directory) {
     ls(directory);
@@ -323,8 +311,9 @@ void create_dir(pi_dirent_t *directory) {
 }
 
 
-
-
+//******************************************
+// DRAWING AND PBMs
+//******************************************
 
 void display_show_drawing_status(int drawing_mode) {
     char status[20];
@@ -496,6 +485,9 @@ void display_pbm(pi_file_t *file, const char *filename) {
     }
 }
 
+//******************************************
+// FILE NAVIGATION AND MENU
+//******************************************
 
 void show_filesystem_menu(pi_dirent_t *current_dir) {
     printk(" in show menu! \n\n");
@@ -644,6 +636,9 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
 }
 
 
+//******************************************
+// FILE & DIR READING
+//******************************************
 
 void display_file_text(const char *filename, char **text, int line_count) {
     char *display_buffer = *text;
@@ -715,11 +710,15 @@ void display_text(pi_file_t *file, const char *filename) {
             current_start_line++;
             delay_ms(150);
         }
+
+        if (!gpio_read(input_single)) {
+            printk("ADITI TODO: open a menu to 1. duplicate or 2. delete the file");
+            delay_ms(150);
+        }
         
         delay_ms(200); // debouncing
     }
 }
-
 
 void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
     trace("about to display file %s\n", file_dirent->name);
@@ -1042,6 +1041,10 @@ void start_screen(void) {
     }
 }
 
+
+//******************************************
+// NOTMAIN
+//******************************************
 
 void notmain(void) {
     trace("Initializing display at I2C address 0x%x\n", SSD1306_I2C_ADDR);
