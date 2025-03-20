@@ -20,6 +20,7 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
+char unique_folder_id = 65; // starts at: "A" // used when creating files
 
 // for all functions; this should never change
 fat32_fs_t fs;
@@ -72,7 +73,6 @@ void start_screen(fat32_fs_t fs, pi_dirent_t root);
 //******************************************
 
 
-
 void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
     pi_directory_t files = fat32_readdir(fs, directory);
     printk("Got %d files.\n", files.ndirents);
@@ -118,23 +118,45 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     int writ = fat32_write(fs, directory, filename, &new_file_contents);
     printk("wrote *prefetch flush* to file: %s\n", filename);
     
-    delay_ms(1000);
+    delay_ms(600);
 
 }
 
-void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
+void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
+    ls(fs, directory);
 
+    // doesn't create file if file alr exists
+    pi_dirent_t *created_folder = NULL;
+    // create a file; name it a random number like dirA
+    printk("\n\n\n creating a dir \n\n\n");
+    char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
+    do {
+        printk("\n\n\n in dowhile \n\n\n");
+
+        created_folder = fat32_create(fs, directory, foldername, 1); // 1 = create a directory
+        foldername[3] = unique_folder_id++; // make sure we create a new file!!
+
+    } while (created_folder == NULL);
+
+    display_clear();
+    // Display navigation hints
+    display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
+    display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
+    display_update();
+
+    delay_ms(2000);
+}
+
+void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
     ls(fs, directory);
 
     // doesn't create file if file alr exists
     pi_dirent_t *created_file;
+    // create a file; name it a random number like demoLETTER
+    char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     do {
-        // create a file; name it a random number like demoLETTER
-        char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
-        unique_file_id++;
-
         created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
-
+        filename[4] = unique_file_id++; // make sure we create a new file!!
     } while (created_file == NULL);
     
     delay_ms(400);
@@ -160,11 +182,11 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
         // these buttons write to file
         if (!gpio_read(input_left)) {
             append_to_file(fs, directory, filename, "*prefetch flush* ");
-        } if (!gpio_read(input_bottom)) {
+        } else if (!gpio_read(input_bottom)) {
             append_to_file(fs, directory, filename, "MORE PIZZA ");
-        } if (!gpio_read(input_right)) {
+        } else if (!gpio_read(input_right)) {
             append_to_file(fs, directory, filename, "minor ");
-        } if (!gpio_read(input_top)) {
+        } else if (!gpio_read(input_top)) {
             append_to_file(fs, directory, filename, "Dawson!! ");
         } 
         delay_ms(200);
@@ -253,31 +275,55 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     printk(" in show menu! \n\n");
     delay_ms(400);
+    uint8_t selected_item = 1;
+    uint8_t NUM_MENU_OPTIONS = 2;
 
     while(1) {
 
         display_clear();
-        // write (c) on top right for create
-        display_draw_char(128 - (6 * 3), 10, '(', WHITE, BLACK, 1);
-        display_draw_char(128 - (6 * 2), 10, 'c', WHITE, BLACK, 1);
-        display_draw_char(128 - (6 * 1), 10, ')', WHITE, BLACK, 1);
+        // meny 
+        display_draw_char(128 - (6 * 3), selected_item*10, '(', WHITE, BLACK, 1);
+        display_draw_char(128 - (6 * 1), selected_item*10, ')', WHITE, BLACK, 1);
+
+        // menu options
+        display_draw_char(128 - (6 * 2), 10, 'f', WHITE, BLACK, 1);
+        display_draw_char(128 - (6 * 2), 20, 'd', WHITE, BLACK, 1);
 
         display_write(10, 2, "menu\n>: select, \n*: exit", WHITE, BLACK, 1);
+
         display_update();
 
-
+        
         if (!gpio_read(input_right)) {
-            // call create-file
-            create_file(fs, directory);
+            // go into that menu option.
+            switch (selected_item) {
+                case 1: 
+                    create_file(fs, directory);
+                    break;
+                case 2:
+                    printk("gonna create a dir");
+                    create_dir(fs, directory);
+                    break;
+                default:
+                    printk("didn't enter any cases");
+                    break;
+            }
             delay_ms(200);
             return;
         }
-        if (!gpio_read(input_single)) {
+        else if (!gpio_read(input_bottom)) {
+            if (selected_item < NUM_MENU_OPTIONS) selected_item++;
+        }
+        else if (!gpio_read(input_top)) {
+            if (selected_item > 1) selected_item--;
+        }
+        else if (!gpio_read(input_single)) {
             // close menu
             display_clear();
             display_update();
             show_files(fs, directory);
         }
+        
 
         // TODO implm up/down arrows to select other menu options; highlight them
     }
