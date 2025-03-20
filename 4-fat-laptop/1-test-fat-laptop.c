@@ -550,7 +550,7 @@ void display_text(pi_file_t *file, const char *filename) {
         display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
         
         // Show the file content
-        display_writje(0, 12, display_buffer, WHITE, BLACK, 1);
+        display_write(0, 12, display_buffer, WHITE, BLACK, 1);
         
         // Add scroll indicators if needed
         if (current_start_line > 0) {
