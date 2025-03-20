@@ -479,6 +479,8 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
 }
 
+
+
 void setup_directory_info(ext_dirent_t *current_dir) {
     selected_index = 0;  // Reset selection
     top_index = 0;       // Reset view position
