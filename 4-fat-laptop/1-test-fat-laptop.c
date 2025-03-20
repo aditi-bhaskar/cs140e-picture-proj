@@ -26,13 +26,15 @@ fat32_fs_t fs;
 pi_dirent_t root;
 
 
-// for show_files
+// for navigate_file_system
 uint32_t top_index = 0;      // First visible entry index
 uint32_t selected_index = 0;  // Currently selected entry
 int entries_offset = 0;       // Offset for skipping special directories
 uint32_t adjusted_total = 0;
 uint32_t total_entries = 0;
 pi_directory_t files;
+const uint32_t NUM_ENTRIES_TO_SHOW = 4; // Show 4 files at a time on screen
+uint32_t bot_index;
 
 void test_buttons(void){
     while (1) {
@@ -65,7 +67,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
 // FUNCTION HEADERS!!
 //******************************************
 
-void show_files(fat32_fs_t *fs, pi_dirent_t *directory);
+void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *directory);
 void start_screen(fat32_fs_t fs, pi_dirent_t root);
 //******************************************
 // FUNCTIONS!!
@@ -270,7 +272,7 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
             // close menu
             display_clear();
             display_update();
-            show_files(fs, directory);
+            navigate_file_system(fs, directory);
         }
 
         // TODO implm up/down arrows to select other menu options; highlight them
@@ -426,6 +428,8 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
 }
 
 void setup_directory_info(ext_dirent_t *current_dir) {
+    selected_index = 0;  // Reset selection
+    top_index = 0;       // Reset view position
     // Read current directory contents; this setup happens everywhere
     files = fat32_readdir(&fs, &(current_dir->entry));
     total_entries = files.ndirents;
@@ -443,189 +447,169 @@ void setup_directory_info(ext_dirent_t *current_dir) {
     ls(&fs, &(current_dir->entry)); // debug stuff
 
     // Handle empty directories (after filtering)
-    if (adjusted_total == 0) {
+    if (adjusted_total == 0) { // TODO: is this in the right location?? suze
         display_clear();
         display_write(10, 20, "Empty directory", WHITE, BLACK, 1);
         display_update();
         delay_ms(1000);
     }
     
-    // Reset selection when entering a new directory
+    // Reset selection when entering a new directory --> do we still need this?
     if (selected_index >= adjusted_total) {
         selected_index = 0;
         top_index = 0;
     }
+}
 
+void determine_what_to_show(char **text, size_t buffer_size) {
+    // determining what to show on screen (which files etc.)
+    bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, adjusted_total - 1);
+    char *text_to_display = *text;
+        
+    // Build the display text
+    text_to_display[0] = '\0';
+    int text_pos = 0;
+    
+    // Add visible entries to the display buffer
+    int real_index = 0;  // Index into the actual directory entries
+    int filtered_index = 0;  // Index into filtered entries (excluding '.' entries)
+    // determines which files to show
+    while (filtered_index <= bot_index && real_index < total_entries) {
+        pi_dirent_t *dirent = &files.dirents[real_index];
+        
+        // Skip entries that start with . (as before)
+        if (dirent->name[0] == '.') {
+            real_index++;
+            continue;
+        }
+        
+        // Only process entries that are within our visible range
+        if (filtered_index >= top_index && filtered_index <= bot_index) {
+            // Add selection indicator
+            if (filtered_index == selected_index) {
+                text_to_display[text_pos++] = '>';
+            } else {
+                text_to_display[text_pos++] = ' ';
+            }
+            
+            // If it's a directory, add the slash
+            if (dirent->is_dir_p) {
+                text_to_display[text_pos++] = '/';
+            }
+            
+            // Copy filename
+            int j = 0;
+            // Skip trailing spaces when displaying
+            int last_non_space = -1;
+            while (dirent->name[j] != '\0' && text_pos < buffer_size - 2) {
+                if (dirent->name[j] != ' ') {
+                    last_non_space = j;
+                }
+                text_to_display[text_pos++] = dirent->name[j++];
+            }
+            
+            // Trim trailing spaces in display
+            if (last_non_space >= 0 && j > 0) {
+                text_pos = text_pos - (j - last_non_space - 1);
+            }
+            
+            // Add newline
+            if (text_pos < buffer_size - 2) {
+                text_to_display[text_pos++] = '\n';
+            }
+            
+            text_to_display[text_pos] = '\0';
+        }
+        filtered_index++;
+        real_index++;
+    }
+    printk("what will be shown: %s", text_to_display);
+}
+
+void display_file_navigation(ext_dirent_t *current_dir, char **text) {
+    display_clear();
+
+    // show directory name at the top
+    char dir_name[22]; // Limit to screen width
+    if (current_dir->entry.name[0] == '\0') {
+        safe_strcpy(dir_name, "Root Directory", sizeof(dir_name));
+    } else {
+        safe_strcpy(dir_name, current_dir->entry.name, sizeof(dir_name));
+    }
+    display_write(10, 0, dir_name, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+    
+    // Show file list
+    display_write(0, 12, (*text), WHITE, BLACK, 1);
+    display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Back >:Open", WHITE, BLACK, 1);
+
+    display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
+    display_update();
+    delay_ms(200); // debounce
 }
 
 
-void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
-    // Constants for navigation
-    const uint32_t NUM_ENTRIES_TO_SHOW = 4; // Show 4 files at a time on screen
-    
+
+void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
     // Create an extended directory structure to track parents
     ext_dirent_t current_dir;
     current_dir.entry = *starting_directory;
     current_dir.parent = NULL;  // Root has no parent
     setup_directory_info(&current_dir);
+
+    char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
+    char *text_ptr = text_to_display; // bc arrays hate me in C 
+        
     
     // Main file browser loop
     while(1) {
-        // Calculate visible range
-        uint32_t bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, adjusted_total - 1);
-        
-        // Build the display text
-        char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
-        text_to_display[0] = '\0';
-        int text_pos = 0;
-        
-        // Add visible entries to the display buffer
-        int real_index = 0;  // Index into the actual directory entries
-        int filtered_index = 0;  // Index into filtered entries (excluding '.' entries)
-        
-        // determines which files to show
-        while (filtered_index <= bot_index && real_index < total_entries) {
-            pi_dirent_t *dirent = &files.dirents[real_index];
-            
-            // Skip entries that start with . (as before)
-            if (dirent->name[0] == '.') {
-                real_index++;
-                continue;
-            }
-            
-            // Only process entries that are within our visible range
-            if (filtered_index >= top_index && filtered_index <= bot_index) {
-                // Add selection indicator
-                if (filtered_index == selected_index) {
-                    text_to_display[text_pos++] = '>';
-                } else {
-                    text_to_display[text_pos++] = ' ';
-                }
-                
-                // If it's a directory, add the slash
-                if (dirent->is_dir_p) {
-                    text_to_display[text_pos++] = '/';
-                }
-                
-                // Copy filename
-                int j = 0;
-                // Skip trailing spaces when displaying
-                int last_non_space = -1;
-                while (dirent->name[j] != '\0' && text_pos < sizeof(text_to_display) - 2) {
-                    if (dirent->name[j] != ' ') {
-                        last_non_space = j;
-                    }
-                    text_to_display[text_pos++] = dirent->name[j++];
-                }
-                
-                // Trim trailing spaces in display
-                if (last_non_space >= 0 && j > 0) {
-                    text_pos = text_pos - (j - last_non_space - 1);
-                }
-                
-                // Add newline
-                if (text_pos < sizeof(text_to_display) - 2) {
-                    text_to_display[text_pos++] = '\n';
-                }
-                
-                text_to_display[text_pos] = '\0';
-            }
-            filtered_index++;
-            real_index++;
-        }
-        
-        // Display current directory name and file list
-        display_clear();
-        char dir_name[22]; // Limit to screen width
-        if (current_dir.entry.name[0] == '\0') {
-            safe_strcpy(dir_name, "Root Directory", sizeof(dir_name));
-        } else {
-            safe_strcpy(dir_name, current_dir.entry.name, sizeof(dir_name));
-        }
-        
-        // Show the current directory at the top
-        display_write(10, 0, dir_name, WHITE, BLACK, 1);
-        display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
-        
-        // Show file list
-        display_write(0, 12, text_to_display, WHITE, BLACK, 1);
-        
-        // Show navigation help
-        if (current_dir.parent != NULL) {
-            display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Back >:Open", WHITE, BLACK, 1);
-        } else {
-            display_write(0, SSD1306_HEIGHT - 8, "^v:Move <:Exit >:Open", WHITE, BLACK, 1);
-        }
-        display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE); // added by suze 
-        
-        display_update();
-        delay_ms(100); // Debouncing delay
-        
+        determine_what_to_show(&text_ptr, 18 * NUM_ENTRIES_TO_SHOW + 1); // fills in text_to_display via text_ptr
+
+        display_file_navigation(&current_dir, &text_ptr);
+
         // Wait for button input
         while(gpio_read(input_left) && gpio_read(input_right) && 
               gpio_read(input_top) && gpio_read(input_bottom) && 
               gpio_read(input_single)) {
-            // Just wait for a button press
             delay_ms(50);
         }
         
-        // Handle button input
-        if (!gpio_read(input_left)) {
-            // This is the "back" button - navigate to parent directory if we have one
-            if (current_dir.parent != NULL) {
-                display_clear();
-                display_write(10, 20, "Going back...", WHITE, BLACK, 1);
-                display_update();
-                delay_ms(200);
-                
-                // We need to cast the parent pointer back to ext_dirent_t*
-                ext_dirent_t* parent_dir = (ext_dirent_t*)current_dir.parent;
-                
-                // Navigate to parent directory
-                current_dir = *parent_dir;
-                selected_index = 0;  // Reset selection
-                top_index = 0;       // Reset view position
-                setup_directory_info(&current_dir);
-                
-            } else {
-                // root directory; return to start screen
+        if (!gpio_read(input_left)) { // back button
+            // return if parent is root
+            if (current_dir.parent == NULL) {
                 return;
             }
+            // parent is not root; show text to indicate going back
+            display_clear();
+            display_write(10, 20, "Going back...", WHITE, BLACK, 1);
+            display_update();
+            delay_ms(200);
+            
+            // Navigate to parent directory
+            ext_dirent_t* parent_dir = (ext_dirent_t*)current_dir.parent;
+            current_dir = *parent_dir;
+            setup_directory_info(&current_dir);
+
             delay_ms(200); // Debounce
         }
-        else if (!gpio_read(input_bottom)) {
-            // Move selection down
-            if (selected_index < adjusted_total - 1) {
-                selected_index++;
-                
-                // Scroll if selection goes below visible area
-                if (selected_index > bot_index) {
-                    top_index++;
-                }
-            }
-            delay_ms(200); // Prevent rapid scrolling
-        }
         else if (!gpio_read(input_right)) {
-            // Convert selected_index to real index
-            int real_selected_index = 0;
-            int count = 0;
-            
-            for (int i = 0; i < total_entries; i++) {
-                if (files.dirents[i].name[0] == '.') {
-                    continue;  // Skip entries that start with .
-                }
-                
-                if (count == selected_index) {
-                    real_selected_index = i;
-                    break;
-                }
-                count++;
-            }
-            
+            // unsure if i still need this
+            // int real_selected_index = 0;
+            // int count = 0;
+            // for (int i = 0; i < total_entries; i++) {
+            //     if (files.dirents[i].name[0] == '.') {
+            //         continue;  // Skip entries that start with .
+            //     }
+            //     if (count == selected_index) {
+            //         real_selected_index = i;
+            //         break;
+            //     }
+            //     count++;
+            // }
+
             // Get the selected directory entry
-            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
+            pi_dirent_t *selected_dirent = &files.dirents[selected_index];
             
-            // Handle selection action based on entry type
             if (selected_dirent->is_dir_p) {
                 // Create a new extended directory entry with parent pointer
                 ext_dirent_t* new_parent = kmalloc(sizeof(ext_dirent_t));
@@ -644,9 +628,6 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
                 display_write(10, 20, "Entering directory...", WHITE, BLACK, 1);
                 display_update();
                 delay_ms(200);
-                
-                selected_index = 0;  // Reset selection for new directory
-                top_index = 0;       // Reset view position
             } 
             else {
                 // It's a file - display its content
@@ -654,7 +635,18 @@ void show_files(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
             delay_ms(200); // Debounce
         }
-        else if (!gpio_read(input_top)) {
+        else if (!gpio_read(input_bottom)) { // scroll down
+            if (selected_index < adjusted_total - 1) {
+                selected_index++;
+                
+                // Scroll if selection goes below visible area
+                if (selected_index > bot_index) {
+                    top_index++;
+                }
+            }
+            delay_ms(150); // Prevent rapid scrolling
+        }
+        else if (!gpio_read(input_top)) { // scroll up
             // Move selection up
             if (selected_index > 0) {
                 selected_index--;
@@ -689,7 +681,7 @@ void start_screen(fat32_fs_t fs, pi_dirent_t root) {
               !gpio_read(input_top) || !gpio_read(input_bottom) || 
               !gpio_read(input_single)) {
                 // someone pressed a button
-            show_files(&fs, &root);
+            navigate_file_system(&fs, &root);
             delay_ms(200); // to make sure we don't immediately click into it
         }
         
