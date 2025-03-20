@@ -26,7 +26,7 @@ char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
 fat32_fs_t fs;
-pi_dirent_t root;
+pi_dirent_t root; // root directory
 
 
 // for navigate_file_system
@@ -78,15 +78,15 @@ static uint32_t min(uint32_t a, uint32_t b) {
 // FUNCTION HEADERS!!
 //******************************************
 
-void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *directory);
-void start_screen(fat32_fs_t fs, pi_dirent_t root);
+void navigate_file_system(pi_dirent_t *directory);
+void start_screen(void);
+
 //******************************************
 // FUNCTIONS!!
 //******************************************
 
-
-void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
-    pi_directory_t files = fat32_readdir(fs, directory);
+void ls(pi_dirent_t *directory) {
+    pi_directory_t files = fat32_readdir(&fs, directory);
     printk("Got %d files.\n", files.ndirents);
 
     for (int i = 0; i < files.ndirents; i++) {
@@ -122,23 +122,23 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
 }
 
 
-void dup_file(fat32_fs_t *fs, pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
-    ls(fs, directory);
+void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
+    ls(directory);
     
     pi_dirent_t *created_file = NULL;
     char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
     do {
         filename[4] = unique_dup_id; // make sure we create a new file!!
-        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
         unique_dup_id++; // if needed for the next loop/iteration
     } while (created_file == NULL);
 
     printk(">>DUPLICATING FILE %s", filename);
     delay_ms(2000);
 
-    copy_file_contents(fs, directory, raw_name, filename); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
+    copy_file_contents(&fs, directory, raw_name, filename); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
 
-    ls(fs, directory);
+    ls(directory);
 
     delay_ms(400);
 }
@@ -178,8 +178,8 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
 }
 
 
-void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
-    ls(fs, directory);
+void create_dir(pi_dirent_t *directory) {
+    ls(directory);
 
     // doesn't create file if file alr exists
     pi_dirent_t *created_folder = NULL;
@@ -189,7 +189,7 @@ void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
     do {
         printk("\n\n\n in dowhile \n\n\n");
 
-        created_folder = fat32_create(fs, directory, foldername, 1); // 1 = create a directory
+        created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
 
     } while (created_folder == NULL);
@@ -203,15 +203,15 @@ void create_dir(fat32_fs_t *fs, pi_dirent_t *directory) {
     delay_ms(2000);
 }
 
-void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
-    ls(fs, directory);
+void create_file(pi_dirent_t *directory) {
+    ls(directory);
 
     // doesn't create file if file alr exists
     pi_dirent_t *created_file;
     // create a file; name it a random number like demoLETTER
     char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     do {
-        created_file = fat32_create(fs, directory, filename, 0); // 0=not a directory
+        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
         filename[4] = unique_file_id++; // make sure we create a new file!!
     } while (created_file == NULL);
     
@@ -237,13 +237,13 @@ void create_file(fat32_fs_t *fs, pi_dirent_t *directory) {
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
-            append_to_file(fs, directory, filename, "*prefetch flush* ");
+            append_to_file(&fs, directory, filename, "*prefetch flush* ");
         } else if (!gpio_read(input_bottom)) {
-            append_to_file(fs, directory, filename, "MORE PIZZA ");
+            append_to_file(&fs, directory, filename, "MORE PIZZA ");
         } else if (!gpio_read(input_right)) {
-            append_to_file(fs, directory, filename, "minor ");
+            append_to_file(&fs, directory, filename, "minor ");
         } else if (!gpio_read(input_top)) {
-            append_to_file(fs, directory, filename, "Dawson!! ");
+            append_to_file(&fs, directory, filename, "Dawson!! ");
         } 
         delay_ms(200);
 
@@ -327,28 +327,25 @@ void display_interactive_pbm(pi_file_t *file, const char *filename) {
 }
 
 
-void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
-
+void show_filesystem_menu(pi_dirent_t *current_dir) {
     printk(" in show menu! \n\n");
-    delay_ms(400);
+    delay_ms(200);
     uint8_t selected_item = 1;
-    uint8_t NUM_MENU_OPTIONS = 3; // cr f, cr d, dup f
+    uint8_t NUM_MENU_OPTIONS = 2; // cr f, cr d, dup f
 
     while(1) {
 
         display_clear();
-        // meny 
+        // menu selector
         display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
-        // display_draw_char(SSD1306_WIDTH - (6 * 2), selected_item*10, ')', WHITE, BLACK, 1);
 
         // menu options
         display_write(12, 10, "create file", WHITE, BLACK, 1);
-        display_write(12, 20, "create dir ", WHITE, BLACK, 1);
-        display_write(12, 30, "duplic file", WHITE, BLACK, 1);
+        display_write(12, 20, "create directory ", WHITE, BLACK, 1);
 
         // control info
         display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
-        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Do *:Exit", WHITE, BLACK, 1);
+        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Select *:Exit", WHITE, BLACK, 1);
 
         display_update();
 
@@ -357,13 +354,12 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
             // go into that menu option.
             switch (selected_item) {
                 case 1: 
-                    create_file(fs, directory);
+                    create_file(current_dir);
                     break;
                 case 2:
-                    create_dir(fs, directory);
+                    create_dir(current_dir);
                     break;
                 default:
-                    dup_file(fs, directory, filename);
                     break;
             }
             delay_ms(200);
@@ -381,11 +377,9 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
             // close menu
             display_clear();
             display_update();
-            navigate_file_system(fs, directory);
+            navigate_file_system(current_dir);
         }
         
-
-        // TODO implm up/down arrows to select other menu options; highlight them
     }
 
 }
@@ -590,12 +584,13 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
 
 
 void setup_directory_info(ext_dirent_t *current_dir) {
+    trace("entering setup_directory_info\n");
     selected_index = 0;  // Reset selection
     top_index = 0;       // Reset view position
     // Read current directory contents; this setup happens everywhere
     files = fat32_readdir(&fs, &(current_dir->entry));
     total_entries = files.ndirents;
-    printk("Got %d files.\n", files.ndirents);
+    trace("Got %d files.\n", files.ndirents);
     // Count how many entries start with . to calculate our offset (bc we don't show them)
     entries_offset = 0;
     for (int i = 0; i < total_entries; i++) {
@@ -606,7 +601,7 @@ void setup_directory_info(ext_dirent_t *current_dir) {
         }
     }
     adjusted_total = total_entries - entries_offset;
-    ls(&fs, &(current_dir->entry)); // debug stuff
+    ls(&(current_dir->entry)); // debug stuff
 
     // Handle empty directories (after filtering)
     if (adjusted_total == 0) { // TODO: is this in the right location?? suze
@@ -712,7 +707,8 @@ void display_file_navigation(ext_dirent_t *current_dir, char **text) {
 
 
 
-void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
+void navigate_file_system(pi_dirent_t *starting_directory) {
+    trace("entered navigate_file_system \n");
     // Create an extended directory structure to track parents
     ext_dirent_t current_dir;
     current_dir.entry = *starting_directory;
@@ -790,7 +786,7 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             } 
             else {
                 // It's a file - display its content
-                display_file(fs, &current_dir.entry, selected_dirent);
+                display_file(&fs, &current_dir.entry, selected_dirent);
             }
         }
         else if (!gpio_read(input_bottom)) { // scroll down
@@ -816,34 +812,7 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             }
         }
         else if (!gpio_read(input_single)) {
-            show_menu(&current_dir.entry, selected_dirent->name);//name of file);
-
-            // TODO MAKE HELPER
-            // int real_selected_index = 0;
-            // int count = 0;
-            // for (int i = 0; i < total_entries; i++) {
-            //     if (files.dirents[i].name[0] == '.') {
-            //         continue;  // Skip entries that start with .
-            //     }
-            //     if (count == selected_index) {
-            //         real_selected_index = i;
-            //         break;
-            //     }
-            //     count++;
-            // }
-
-            // // Get the selected directory entry
-            // pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
-            
-            // if (selected_dirent->is_dir_p) {
-            //     display_clear();
-            //     display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
-            //     display_update();
-            //     delay_ms(400);
-            // } else {
-            //     show_menu(fs, &current_dir.entry, selected_dirent->name);//name of file);
-            //     delay_ms(200);
-            // }
+            show_filesystem_menu(&(current_dir.entry)); // we don't need parent directory information
         
         }
         delay_ms(200); // Debounce
@@ -853,7 +822,7 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
 
 
 
-void start_screen(fat32_fs_t fs, pi_dirent_t root) {
+void start_screen(void) {
     // Display welcome screen with bouncing ? symbol animation
     int bounce_x = SSD1306_WIDTH / 2;
     int bounce_y = 30;
@@ -866,7 +835,7 @@ void start_screen(fat32_fs_t fs, pi_dirent_t root) {
               !gpio_read(input_top) || !gpio_read(input_bottom) || 
               !gpio_read(input_single)) {
                 // someone pressed a button
-            navigate_file_system(&fs, &root);
+            navigate_file_system(&root);
             delay_ms(200); // to make sure we don't immediately click into it
         }
         
@@ -905,8 +874,6 @@ void start_screen(fat32_fs_t fs, pi_dirent_t root) {
 }
 
 
-
-
 void notmain(void) {
     trace("Initializing display at I2C address 0x%x\n", SSD1306_I2C_ADDR);
     display_init();
@@ -935,8 +902,9 @@ void notmain(void) {
     fs = fat32_mk(&partition);
     trace("Loading the root directory\n");
     root = fat32_get_root(&fs);
+    trace("Finished loading the root directory\n");
   
     // shows cute start screen stuff
-    start_screen(fs, root);
+    start_screen();
     // we should never return from here since there is a while (1) loop
 }
