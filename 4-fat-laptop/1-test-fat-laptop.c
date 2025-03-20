@@ -1,6 +1,11 @@
 // TODO 
-// why wont file write in a new/empty dir?
-// why won't newly duplicated files show up when scrolling?
+// setup_directory_info (fills in glo values), determine_screen_content (fills array), display_file_navigation
+//      ^ use these functions and printk debug why newly created files/dirs/duplications won't show up as soon as they're created
+
+// make creating a file pretty, so it types exactly in the file, (and auto-scrolls)? --> 
+//      can display instructions briefly, and then just type into file and display file??
+
+// remove extra comments + make nicer summative comments
 
 
 #include "display.c"
@@ -23,7 +28,7 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
-char unique_folder_id = 67; // starts at: "A" // used when creating dirs
+char unique_folder_id = 70; // starts at: "A" // used when creating dirs
 char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
@@ -82,6 +87,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
 
 void navigate_file_system(pi_dirent_t *directory);
 void start_screen(void);
+void setup_directory_info(pi_dirent_t *current_dir);
 
 //******************************************
 // FUNCTIONS!!
@@ -180,7 +186,7 @@ void create_dir(pi_dirent_t *directory) {
     // create a file; name it a random number like dirA
     char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
     do {
-        created_folder = fat32_create(fs, directory, foldername, 1); // 1 = create a directory
+        created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
     } while (created_folder == NULL);
 
@@ -203,7 +209,7 @@ void create_dir(pi_dirent_t *directory) {
     display_update();
 
     printk("Created a directory!\n");
-    ls(fs, directory);
+    ls(directory);
 
     delay_ms(2000);
 }
@@ -255,7 +261,7 @@ void create_file(pi_dirent_t *directory) {
     }
 
     printk("AFTER CREATE FILE:\n");
-    ls(fs, directory);
+    ls(directory);
 }
 
 
@@ -386,8 +392,8 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
             display_clear();
             display_update();
             navigate_file_system(current_dir);
+            setup_directory_info(current_dir); // to set up any new files/dirs which might have been created
         }
-        
     }
 }
 
@@ -587,14 +593,12 @@ void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dire
     }
 }
 
-
-
-void setup_directory_info(ext_dirent_t *current_dir) {
+void setup_directory_info(pi_dirent_t *current_dir_entry) {
     trace("entering setup_directory_info\n");
     selected_index = 0;  // Reset selection
     top_index = 0;       // Reset view position
     // Read current directory contents; this setup happens everywhere
-    files = fat32_readdir(&fs, &(current_dir->entry));
+    files = fat32_readdir(&fs, current_dir_entry);
     total_entries = files.ndirents;
     trace("Got %d files.\n", files.ndirents);
     // Count how many entries start with . to calculate our offset (bc we don't show them)
@@ -607,7 +611,7 @@ void setup_directory_info(ext_dirent_t *current_dir) {
         }
     }
     adjusted_total = total_entries - entries_offset;
-    ls(&(current_dir->entry)); // debug stuff
+    ls(current_dir_entry); // debug stuff
 
     // Handle empty directories (after filtering)
     if (adjusted_total == 0) { // TODO: is this in the right location?? suze
@@ -719,7 +723,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
     ext_dirent_t current_dir;
     current_dir.entry = *starting_directory;
     current_dir.parent = NULL;  // Root has no parent
-    setup_directory_info(&current_dir);
+    setup_directory_info(&current_dir.entry);
 
     char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
     char *text_ptr = text_to_display; // bc arrays hate me in C 
@@ -751,7 +755,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
             // Navigate to parent directory
             ext_dirent_t* parent_dir = (ext_dirent_t*)current_dir.parent;
             current_dir = *parent_dir;
-            setup_directory_info(&current_dir);
+            setup_directory_info(&(current_dir.entry));
 
             delay_ms(200); // Debounce
         }
@@ -782,7 +786,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
                 // Create a new current directory with the selected entry
                 current_dir.entry = *selected_dirent;
                 current_dir.parent = new_parent;
-                setup_directory_info(&current_dir);
+                setup_directory_info(&current_dir.entry);
                 
                 // Regular directory - navigate into it
                 display_clear();
