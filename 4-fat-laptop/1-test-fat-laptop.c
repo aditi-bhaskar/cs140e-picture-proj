@@ -82,6 +82,7 @@ static uint32_t min(uint32_t a, uint32_t b) {
 
 void navigate_file_system(pi_dirent_t *directory);
 void start_screen(void);
+int show_pbm_menu(void);
 
 //******************************************
 // FUNCTIONS!!
@@ -259,6 +260,66 @@ void create_file(pi_dirent_t *directory) {
 }
 
 
+void display_show_drawing_status(int drawing_mode) {
+    char status[20];
+    snprintk(status, sizeof(status), "Mode: %s", 
+             drawing_mode ? "DRAWING" : "NAVIGATE");
+    
+    // Display the status
+    display_write(0, SSD1306_HEIGHT - 16, status, WHITE, BLACK, 1);
+    display_draw_line(0, SSD1306_HEIGHT - 18, SSD1306_WIDTH, SSD1306_HEIGHT - 18, WHITE);
+    
+    // Add hint for menu
+    display_write(0, SSD1306_HEIGHT - 8, "*:Menu ^v<>:Move", WHITE, BLACK, 1);
+}
+
+int show_pbm_menu(void) {
+    uint8_t selected_item = 1;
+    uint8_t NUM_MENU_OPTIONS = 3;
+
+    while(1) {
+        display_clear();
+        
+        display_write(10, 0, "PBM Edit Menu", WHITE, BLACK, 1);
+        display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+        display_draw_char(6, selected_item*10 + 5, '>', WHITE, BLACK, 1);
+        display_write(12, 15, "Navigate Mode", WHITE, BLACK, 1);
+        display_write(12, 25, "Draw Mode", WHITE, BLACK, 1);
+        display_write(12, 35, "Exit File", WHITE, BLACK, 1);
+
+        display_draw_line(0, SSD1306_HEIGHT-9, SSD1306_WIDTH, SSD1306_HEIGHT-9, WHITE);
+        display_write(0, SSD1306_HEIGHT-8, "^v:Move >:Select *:Back", WHITE, BLACK, 1);
+
+        display_update();
+        
+        while (gpio_read(input_left) && gpio_read(input_right) && 
+               gpio_read(input_top) && gpio_read(input_bottom) && 
+               gpio_read(input_single)) {
+            delay_ms(50);
+        }
+        
+        if (!gpio_read(input_right)) {
+            // Select this option
+            return selected_item;
+        }
+        else if (!gpio_read(input_bottom)) {
+            if (selected_item < NUM_MENU_OPTIONS) selected_item++;
+            delay_ms(150);
+        }
+        else if (!gpio_read(input_top)) {
+            if (selected_item > 1) selected_item--;
+            delay_ms(150);
+        }
+        else if (!gpio_read(input_single)) {
+            // Cancel - return to previous screen without action
+            return 0;
+        }
+    }
+}
+
+/**
+ * Display PBM file with editing capabilities
+ */
 void display_pbm(pi_file_t *file, const char *filename) {
     // Initial display of the image
     display_draw_pbm((uint8_t*)file->data, file->n_data);
@@ -272,8 +333,8 @@ void display_pbm(pi_file_t *file, const char *filename) {
     display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
     
     // Reset cursor and drawing mode
-    cursor_x = 64;  // Start in the middle
-    cursor_y = 32;
+    cursor_x = 0; 
+    cursor_y = 12;
     drawing_mode = DRAWING_MODE_OFF;
     
     // Calculate the boundary for cursor movement
@@ -292,18 +353,12 @@ void display_pbm(pi_file_t *file, const char *filename) {
         
         int cursor_moved = 0;
         
-        // Process button inputs
+        // Process button inputs for cursor movement
         if (!gpio_read(input_left)) {
-            if (drawing_mode == DRAWING_MODE_OFF) {
-                // in navigate mode: Exit image view
-                delay_ms(200); // Debounce
-                return;
-            } else {
-                // Move cursor left in drawing mode
-                if (cursor_x > 0) {
-                    cursor_x -= cursor_speed;
-                    cursor_moved = 1;
-                }
+            // Move cursor left
+            if (cursor_x > 0) {
+                cursor_x -= cursor_speed;
+                cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_right)) {
@@ -321,27 +376,49 @@ void display_pbm(pi_file_t *file, const char *filename) {
             }
         }
         else if (!gpio_read(input_bottom)) {
-            // Move cursor down with improved boundary check
+            // Move cursor down with boundary check
             if (cursor_y < bottom_boundary) {
                 cursor_y += cursor_speed;
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_single)) {
-            if (drawing_mode) {
-                // If in drawing mode, draw a pixel
-                uint16_t byte_idx = cursor_x + (cursor_y / 8) * SSD1306_WIDTH;
-                uint8_t bit_pos = cursor_y % 8;
-                edit_buffer[byte_idx] |= (1 << bit_pos);  // Set pixel to WHITE
-                buffer[byte_idx] |= (1 << bit_pos);       // Update display buffer too
-                display_update(); // Update display to show new pixel
-            } else {
-                // Toggle drawing mode
-                drawing_mode = !drawing_mode;
-                display_show_drawing_status(drawing_mode);
-                display_update();
+            // Show menu
+            int choice = show_pbm_menu();
+            
+            switch(choice) {
+                case 1: // Navigate mode
+                    drawing_mode = DRAWING_MODE_OFF;
+                    break;
+                    
+                case 2: // Draw mode
+                    drawing_mode = DRAWING_MODE_ON;
+                    break;
+                    
+                case 3: // Exit file
+                    return;
+                    
+                default:
+                    break;
             }
+            
+            // Redraw the screen after menu selection
+            memcpy(buffer, edit_buffer, sizeof(buffer));
+            display_write(10, 0, filename, WHITE, BLACK, 1);
+            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+            display_show_drawing_status(drawing_mode);
+            display_draw_cursor(cursor_x, cursor_y, drawing_mode);
+            display_update();
+            
             delay_ms(150);
+            continue; // Skip to next iteration
+        }
+        
+        // If cursor moved and in drawing mode, draw a pixel
+        if (cursor_moved && drawing_mode) {
+            uint16_t byte_idx = cursor_x + (cursor_y / 8) * SSD1306_WIDTH;
+            uint8_t bit_pos = cursor_y % 8;
+            edit_buffer[byte_idx] |= (1 << bit_pos);  // Set pixel to WHITE
         }
         
         // Only redraw if position changed
@@ -360,6 +437,7 @@ void display_pbm(pi_file_t *file, const char *filename) {
         }
     }
 }
+
 
 void show_filesystem_menu(pi_dirent_t *current_dir) {
     printk(" in show menu! \n\n");

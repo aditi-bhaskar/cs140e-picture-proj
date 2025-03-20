@@ -527,22 +527,3 @@ void display_draw_cursor(int x, int y, int drawing) {
     }
 }
 
-/**
- * Update the display to show drawing status
- */
-void display_show_drawing_status(int drawing_mode) {
-    // Prepare drawing mode indicator
-    char status[20];
-    snprintk(status, sizeof(status), "Mode: %s", 
-             drawing_mode ? "DRAWING" : "NAVIGATE");
-    
-    // Display the status and controls
-    display_write(0, SSD1306_HEIGHT - 16, status, WHITE, BLACK, 1);
-    display_draw_line(0, SSD1306_HEIGHT - 18, SSD1306_WIDTH, SSD1306_HEIGHT - 18, WHITE);
-    
-    if (drawing_mode) {
-        display_write(0, SSD1306_HEIGHT - 8, "*:NavigateMode ^v<>:Move", WHITE, BLACK, 1);
-    } else {
-        display_write(0, SSD1306_HEIGHT - 8, "<:Back *:DrawMode ^v<>:Move", WHITE, BLACK, 1);
-    }
-}
