@@ -1,0 +1,27 @@
+DEBUG:done with options: dev name=</dev/cu.usbserial-10>, pi-prog=<./tests/3-fat32-create.bin>, trace=0
+opened tty port </dev/cu.usbserial-10>.
+DEBUG:my-install: tty-usb=</dev/cu.usbserial-10> program=<./tests/3-fat32-create.bin>: about to boot
+TRACE:simple_boot: sending 31920 bytes, crc32=97f8bf6e
+BOOT:waiting for a start
+DEBUG:PRINT_STRING:pi sent print: <Suze UART: success: Received the program!>
+BOOT:bootloader: Done.
+Reading the MBR.
+Loading the first partition.
+Loading the FAT.
+TRACE:fat32_mk:begin lba = 8790
+TRACE:fat32_mk:cluster begin lba = 16384
+TRACE:fat32_mk:sectors per cluster = 64
+TRACE:fat32_mk:root dir first cluster = 2
+Loading the root directory.
+TRACE:cluster_to_lba:cluster 2 to lba: 16384
+Creating TEMP.TXT
+TRACE:fat32_delete:deleting TEMP.TXT
+TRACE:cluster_to_lba:cluster 2 to lba: 16384
+TRACE:write_fat_to_disk:syncing FAT
+TRACE:fat32_create:creating TEMP.TXT
+TRACE:cluster_to_lba:cluster 2 to lba: 16384
+TRACE:write_fat_to_disk:syncing FAT
+PASS: tests/3-fat32-create.c
+DONE!!!
+
+bootloader: pi exited.  cleaning up

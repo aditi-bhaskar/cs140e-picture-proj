@@ -1,0 +1,5 @@
+DEBUG:done with options: dev name=</dev/cu.usbserial-310>, pi-prog=<./tests/2-fat32-hash-read.bin>, trace=0
+opened tty port </dev/cu.usbserial-310>.
+DEBUG:my-install: tty-usb=</dev/cu.usbserial-310> program=<./tests/2-fat32-hash-read.bin>: about to boot
+TRACE:simple_boot: sending 31960 bytes, crc32=7799c72d
+BOOT:waiting for a start
