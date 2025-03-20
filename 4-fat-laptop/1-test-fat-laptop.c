@@ -80,10 +80,10 @@ static uint32_t min(uint32_t a, uint32_t b) {
 
 void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *directory);
 void start_screen(fat32_fs_t fs, pi_dirent_t root);
+
 //******************************************
 // FUNCTIONS!!
 //******************************************
-
 
 void ls(fat32_fs_t *fs, pi_dirent_t *directory) {
     pi_directory_t files = fat32_readdir(fs, directory);
@@ -327,24 +327,22 @@ void display_interactive_pbm(pi_file_t *file, const char *filename) {
 }
 
 
-void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
+void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
 
     printk(" in show menu! \n\n");
     delay_ms(400);
     uint8_t selected_item = 1;
-    uint8_t NUM_MENU_OPTIONS = 3; // cr f, cr d, dup f
+    uint8_t NUM_MENU_OPTIONS = 2; // cr f, cr d, dup f
 
     while(1) {
 
         display_clear();
-        // meny 
+        // menu selector
         display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
-        // display_draw_char(SSD1306_WIDTH - (6 * 2), selected_item*10, ')', WHITE, BLACK, 1);
 
         // menu options
         display_write(12, 10, "create file", WHITE, BLACK, 1);
         display_write(12, 20, "create dir ", WHITE, BLACK, 1);
-        display_write(12, 30, "duplic file", WHITE, BLACK, 1);
 
         // control info
         display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
@@ -363,7 +361,6 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
                     create_dir(fs, directory);
                     break;
                 default:
-                    dup_file(fs, directory, filename);
                     break;
             }
             delay_ms(200);
@@ -384,8 +381,6 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory, char *filename) {
             navigate_file_system(fs, directory);
         }
         
-
-        // TODO implm up/down arrows to select other menu options; highlight them
     }
 
 }
@@ -817,32 +812,34 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
         }
         else if (!gpio_read(input_single)) {
 
-            // TODO MAKE HELPER
-            int real_selected_index = 0;
-            int count = 0;
-            for (int i = 0; i < total_entries; i++) {
-                if (files.dirents[i].name[0] == '.') {
-                    continue;  // Skip entries that start with .
-                }
-                if (count == selected_index) {
-                    real_selected_index = i;
-                    break;
-                }
-                count++;
-            }
+            show_menu(fs, &current_dir.entry);
 
-            // Get the selected directory entry
-            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
+            // // TODO MAKE HELPER -- use this for when we duplicate a dir
+            // int real_selected_index = 0;
+            // int count = 0;
+            // for (int i = 0; i < total_entries; i++) {
+            //     if (files.dirents[i].name[0] == '.') {
+            //         continue;  // Skip entries that start with .
+            //     }
+            //     if (count == selected_index) {
+            //         real_selected_index = i;
+            //         break;
+            //     }
+            //     count++;
+            // }
+
+            // // Get the selected directory entry
+            // pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
             
-            if (selected_dirent->is_dir_p) {
-                display_clear();
-                display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
-                display_update();
-                delay_ms(400);
-            } else {
-                show_menu(fs, &current_dir.entry, selected_dirent->name);//name of file);
-                delay_ms(200);
-            }
+            // if (selected_dirent->is_dir_p) {
+            //     display_clear();
+            //     display_write(10, 20, "Can't copy directory!!", WHITE, BLACK, 1);
+            //     display_update();
+            //     delay_ms(400);
+            // } else {
+            //     , selected_dirent->name);//name of file);
+            //     delay_ms(200);
+            // }
         
         }
         delay_ms(200); // Debounce
@@ -902,8 +899,6 @@ void start_screen(fat32_fs_t fs, pi_dirent_t root) {
         delay_ms(50);  // Control animation speed
     }
 }
-
-
 
 
 void notmain(void) {
