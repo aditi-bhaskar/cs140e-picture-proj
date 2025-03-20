@@ -654,8 +654,22 @@ void navigate_file_system(fat32_fs_t *fs, pi_dirent_t *starting_directory) {
             delay_ms(200); // Debounce
         }
         else if (!gpio_read(input_right)) {
+            int real_selected_index = 0;
+             int count = 0;
+             for (int i = 0; i < total_entries; i++) {
+                 if (files.dirents[i].name[0] == '.') {
+                     continue;  // Skip entries that start with .
+                 }
+                 if (count == selected_index) {
+                     real_selected_index = i;
+                     break;
+                 }
+                 count++;
+             }
+
+
             // Get the selected directory entry
-            pi_dirent_t *selected_dirent = &files.dirents[selected_index];
+            pi_dirent_t *selected_dirent = &files.dirents[real_selected_index];
             
             if (selected_dirent->is_dir_p) {
                 // Create a new extended directory entry with parent pointer
