@@ -180,7 +180,7 @@ void create_dir(pi_dirent_t *directory) {
     // create a file; name it a random number like dirA
     char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
     do {
-        created_folder = fat32_create(fs, directory, foldername, 1); // 1 = create a directory
+        created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
         foldername[3] = unique_folder_id++; // make sure we create a new file!!
     } while (created_folder == NULL);
 
@@ -203,7 +203,7 @@ void create_dir(pi_dirent_t *directory) {
     display_update();
 
     printk("Created a directory!\n");
-    ls(fs, directory);
+    ls(directory);
 
     delay_ms(2000);
 }
@@ -255,7 +255,7 @@ void create_file(pi_dirent_t *directory) {
     }
 
     printk("AFTER CREATE FILE:\n");
-    ls(fs, directory);
+    ls(directory);
 }
 
 
