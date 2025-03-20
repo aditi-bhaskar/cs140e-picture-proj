@@ -40,7 +40,7 @@ int file_pos = 0;
 
 // for display_text
 int start_line = 0;
-int lines_per_screen = 10; 
+int lines_per_screen = 5; 
 
 void test_buttons(void){
     while (1) {
@@ -347,12 +347,15 @@ void show_menu(fat32_fs_t *fs, pi_dirent_t *directory) {
 }
 
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file) {
-    // todo: use buffer size?
     char *display_buffer = *text;
     // Format text for display
     display_buffer[0] = '\0';
     int buf_pos = 0;
     int line_count = 0;
+    
+    // Screen dimensions for text
+    const int CHAR_WIDTH = 6;  // Approximate width of a character in pixels
+    const int MAX_CHARS_PER_LINE = (SSD1306_WIDTH - 5) / CHAR_WIDTH;  // Max chars per line with margin
     
     // Calculate the actual position in the file to start from
     file_pos = 0;
@@ -366,63 +369,208 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
         file_pos++;
     }
     
-    // Now read lines from the calculated position
+    // Variables for word wrapping
+    int chars_in_current_line = 0;
+    int last_space_pos = -1;
+    //int last_space_file_pos = -1;
+    
+    // Now read content from the calculated position
     for (int i = file_pos; i < file->n_data && line_count < lines_per_screen; i++) {
         char c = file->data[i];
         
-        // Add character to buffer
-        if (c == '\r') continue; // Skip carriage returns
+        // Skip carriage returns
+        if (c == '\r') continue;
         
+        // Handle existing newlines in the file
+        if (c == '\n') {
+            display_buffer[buf_pos++] = c;
+            chars_in_current_line = 0;
+            line_count++;
+            last_space_pos = -1;
+            //last_space_file_pos = -1;
+            continue;
+        }
+        
+        // Track spaces for word wrapping
+        if (c == ' ' || c == '\t') {
+            last_space_pos = buf_pos;
+            //last_space_file_pos = i;
+        }
+        
+        // Add character to buffer
         display_buffer[buf_pos++] = c;
+        chars_in_current_line++;
+        
+        // Check if we need to wrap this line
+        if (chars_in_current_line >= MAX_CHARS_PER_LINE) {
+            // If we found a space in this line, replace it with newline
+            if (last_space_pos >= 0 && buf_pos - last_space_pos <= chars_in_current_line) {
+                display_buffer[last_space_pos] = '\n';
+                chars_in_current_line = buf_pos - last_space_pos - 1;
+                line_count++;
+            } else {
+                // No space found for clean break - insert hyphen and newline
+                if (buf_pos + 1 < buffer_size - 1) {
+                    display_buffer[buf_pos-1] = '-';
+                    display_buffer[buf_pos++] = '\n';
+                    display_buffer[buf_pos++] = c;  // Re-add the character we replaced
+                    chars_in_current_line = 1;
+                    line_count++;
+                }
+            }
+            
+            last_space_pos = -1;
+            //last_space_file_pos = -1;
+        }
+        
+        // Ensure we don't overflow the buffer
+        if (buf_pos >= buffer_size - 2) break;
         
         // Ensure null termination
         display_buffer[buf_pos] = '\0';
         
-        // Count lines
-        if (c == '\n') {
-            line_count++;
-        }
-        
         // Check if we've completed all lines
         if (line_count >= lines_per_screen) break;
     }
-}
-
-void display_file_text(const char *filename, char **text) {
-    char *display_buffer = *text;
-    display_clear();
-        
-    // Show file name at the top
-    display_write(10, 0, filename, WHITE, BLACK, 1);
-    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
     
-    // Show the file content
-    display_write(0, 12, display_buffer, WHITE, BLACK, 1);
-    
-    // Add navigation help at bottom
-    display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
-    display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
-    
-    display_update();
-    //trace("contents of display buffer: %s", display_buffer);
+    // Ensure final null termination
+    if (buf_pos < buffer_size) {
+        display_buffer[buf_pos] = '\0';
+    } else {
+        display_buffer[buffer_size - 1] = '\0';
+    }
 }
 
 void display_text(pi_file_t *file, const char *filename) {
     trace("about to display text file");
-    // Buffer to hold the portion of text to display
-    char display_buffer[512]; // Large enough for the visible portion
-    char *display_buffer_ptr = display_buffer_ptr;
-
-    while(1) {
-        determine_screen_content_file(&display_buffer_ptr, 512, file); // populates display_buffer via display_buffer_ptr
-        printk("screen content to be shown is: %s", display_buffer_ptr);
-
-        display_file_text(filename, &display_buffer_ptr); // displays text in display_buffer
-
-        // wait for button press
-        while(gpio_read(input_left) && gpio_read(input_right) && 
-              gpio_read(input_top) && gpio_read(input_bottom) && 
-              gpio_read(input_single)) {
+    
+    // Constants for text formatting
+    const int CHAR_WIDTH = 6;  // Approximate width of a character in pixels
+    const int MAX_CHARS_PER_LINE = (SSD1306_WIDTH - 5) / CHAR_WIDTH;  // Max chars per line with margin
+    //const int LINES_PER_SCREEN = 5;  // Show 5 lines per screen, as requested
+    
+    // Preprocess the file into screen-friendly lines
+    // First, count approximately how many lines we'll need
+    int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
+    
+    // Allocate memory for line start positions
+    int *line_positions = kmalloc(sizeof(int) * estimated_lines);
+    int line_count = 0;
+    
+    // Process the entire file to find line breaks
+    int pos = 0;
+    int chars_in_line = 0;
+    
+    // Mark the start of the first line
+    line_positions[line_count++] = 0;
+    
+    // Scan through the file to find line breaks
+    while (pos < file->n_data && line_count < estimated_lines - 1) {
+        char c = file->data[pos];
+        
+        // Skip carriage returns
+        if (c == '\r') {
+            pos++;
+            continue;
+        }
+        
+        // Handle existing newlines in the file
+        if (c == '\n') {
+            // Mark the start of a new line
+            line_positions[line_count++] = pos + 1;
+            chars_in_line = 0;
+            pos++;
+            continue;
+        }
+        
+        chars_in_line++;
+        
+        // Check if we need to wrap this line - simply cut at the maximum character count
+        if (chars_in_line >= MAX_CHARS_PER_LINE) {
+            // Force a break at the current position, splitting words if necessary
+            line_positions[line_count++] = pos + 1;  // Start new line at next character
+            chars_in_line = 0;
+        }
+        
+        pos++;
+    }
+    
+    // Buffer for the displayed text
+    char display_buffer[512];
+    char *display_buffer_ptr = display_buffer;
+    
+    // Initialize the starting line index (used for scrolling)
+    int current_start_line = 0;
+    
+    // Main display loop
+    while (1) {
+        // Generate the text content for current view
+        display_buffer[0] = '\0';
+        int buf_pos = 0;
+        
+        // Collect LINES_PER_SCREEN lines starting from current_start_line
+        for (int i = 0; i < lines_per_screen && (current_start_line + i) < line_count; i++) {
+            int line_start = line_positions[current_start_line + i];
+            int line_end;
+            
+            // Determine where this line ends
+            if (current_start_line + i + 1 < line_count) {
+                line_end = line_positions[current_start_line + i + 1];
+                // If next position is after a newline, don't include the newline twice
+                if (line_end > 0 && file->data[line_end-1] == '\n') {
+                    line_end--;
+                }
+            } else {
+                line_end = file->n_data;
+            }
+            
+            // Copy the line content to the display buffer
+            for (int j = line_start; j < line_end && buf_pos < sizeof(display_buffer) - 2; j++) {
+                char c = file->data[j];
+                if (c != '\r') {  // Skip carriage returns
+                    display_buffer[buf_pos++] = c;
+                }
+            }
+            
+            // Add a newline if the line doesn't end with one already
+            if (buf_pos > 0 && display_buffer[buf_pos-1] != '\n' && i < lines_per_screen - 1 && 
+                buf_pos < sizeof(display_buffer) - 2) {
+                display_buffer[buf_pos++] = '\n';
+            }
+        }
+        
+        // Ensure null termination
+        display_buffer[buf_pos] = '\0';
+        
+        // Display the content
+        display_clear();
+        
+        // Show file name at the top
+        display_write(10, 0, filename, WHITE, BLACK, 1);
+        display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+        
+        // Show the file content
+        display_writje(0, 12, display_buffer, WHITE, BLACK, 1);
+        
+        // Add scroll indicators if needed
+        if (current_start_line > 0) {
+            display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
+        }
+        
+        if (current_start_line + lines_per_screen < line_count) {
+            display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
+        }
+        
+        // Add navigation help at bottom
+        display_write(0, SSD1306_HEIGHT - 8, "<:Back ^v:Scroll", WHITE, BLACK, 1);
+        display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
+        
+        display_update();
+        
+        // Wait for button press
+        while (gpio_read(input_left) && gpio_read(input_right) && 
+               gpio_read(input_top) && gpio_read(input_bottom) && 
+               gpio_read(input_single)) {
             delay_ms(50);
         }
         
@@ -430,21 +578,22 @@ void display_text(pi_file_t *file, const char *filename) {
             return;
         }
         
-        if (!gpio_read(input_top) && start_line > 0) {
+        if (!gpio_read(input_top) && current_start_line > 0) {
             // Scroll up one line at a time
-            start_line--;
+            current_start_line--;
             delay_ms(150);
         }
-
-        if (!gpio_read(input_bottom) && file_pos + strlen(display_buffer) < file->n_data) {
+        
+        if (!gpio_read(input_bottom) && (current_start_line + lines_per_screen) < line_count) {
             // Scroll down one line at a time
-            start_line++;
+            current_start_line++;
             delay_ms(150);
         }
         
         delay_ms(200); // debouncing
     }
 }
+
 
 void display_file(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
     trace("about to display file %s\n", file_dirent->name);
