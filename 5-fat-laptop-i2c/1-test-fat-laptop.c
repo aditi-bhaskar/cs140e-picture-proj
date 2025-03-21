@@ -342,17 +342,33 @@ void create_file(pi_dirent_t *directory) {
     ls(directory);
 }
 
+
+uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername) {
+
+    pi_directory_t files = fat32_readdir(&fs, directory);
+    printk("Got %d files.\n", files.ndirents);
+
+    for (int i = 0; i < files.ndirents; i++) {
+      pi_dirent_t *dirent = &files.dirents[i];
+      if (dirent->is_dir_p) {
+        if (strncmp(dirent->name, foldername, 4) == 0) {
+            return 0; // bad!
+        }
+      }
+    }
+    return 1; // good!
+}
+
 void create_dir(pi_dirent_t *directory) {
     ls(directory);
 
-    // doesn't create file if file alr exists
-    pi_dirent_t *created_folder = NULL;
-    // create a file; name it a random number like dirA
+    // create a foldername; name it with a random number like dirA
     char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
     do {
-        created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
-        foldername[3] = unique_folder_id++; // make sure we create a new file!!
-    } while (created_folder == NULL);
+        foldername[3] = unique_folder_id++; // make sure we create a new foldername!!
+    } while (does_dir_exist(directory, foldername) == 0); // 0 means a dir with that name alr exists
+
+    pi_dirent_t *created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
 
     display_clear();
     // Display navigation hints
