@@ -551,15 +551,15 @@ void display_pbm(pi_file_t *file, const char *filename, fat32_fs_t *fs, pi_diren
                 cursor_moved = 1;
             }
         }
-        else if (!gpio_read(input_top)) {
-            if (cursor_y > y_offset) {
-                cursor_y -= cursor_speed;  
-                cursor_moved = 1;
-            }
-        }
         else if (!gpio_read(input_bottom)) {
             if (cursor_y < y_offset + height - 1) {
                 cursor_y += cursor_speed;
+                cursor_moved = 1;
+            }
+        }
+        else if (!gpio_read(input_top)) {
+            if (cursor_y > y_offset) {
+                cursor_y -= cursor_speed;  
                 cursor_moved = 1;
             }
         }
