@@ -1,5 +1,5 @@
 #### Aditi & Suze present:
-## CS140e pi-top: a mini laptop to view and manage files!
+## CS140e SUZITI File System: a mini laptop to view and manage files!
 
 ### Features:
  - Device: display (SSD1306)
@@ -16,5 +16,4 @@
  - Together: Wrote display, built/soldered "laptop", fat32
 
 ### Citations:
- - i2c based on: https://github.com/dddrrreee/cs140e-24win/tree/main/labs/11-imu-i2c
  - display based on adafruit code examples
