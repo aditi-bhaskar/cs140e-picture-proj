@@ -197,6 +197,7 @@ void dup_file(pi_dirent_t *directory, const char *origin_name) { // the raw file
     printk(">>DUPLICATING FILE %s", new_filename);
     copy_file_contents(&fs, directory, origin_name, new_filename); 
     
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
     ls(directory);
 
     delay_ms(400);
@@ -336,7 +337,7 @@ void create_file(pi_dirent_t *directory) {
         delay_ms(200);
 
     }
-
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
     printk("AFTER CREATE FILE:\n");
     ls(directory);
 }
@@ -359,6 +360,7 @@ void create_dir(pi_dirent_t *directory) {
     display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
     display_update();
 
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
     printk("Created a directory!\n");
     ls(directory);
 
@@ -555,18 +557,14 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
         display_clear();
         // menu selector
         display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
-
         // menu options
         display_write(12, 10, "create file", WHITE, BLACK, 1);
         display_write(12, 20, "create directory ", WHITE, BLACK, 1);
-
         // control info
         display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
         display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Select *:Exit", WHITE, BLACK, 1);
-
         display_update();
 
-        
         if (!gpio_read(input_right)) {
             // go into that menu option.
             switch (selected_item) {
@@ -595,9 +593,11 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
             display_clear();
             display_update();
             navigate_file_system(current_dir);
+            printk("SETTING UP THE DIR INFO!! ON EXITING CREATE F/D\n\n");
             setup_directory_info(current_dir); // to set up any new files/dirs which might have been created
         }
     }
+
 }
 
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines) {
@@ -768,7 +768,6 @@ void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename)
 
         if (!gpio_read(input_single)) {
             show_file_dup_menu(directory, file, filename);
-            printk("ADITI TODO: open a menu to 1. duplicate or (2. delete?) the file");
             delay_ms(150);
         }
         
@@ -943,7 +942,6 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
     char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
     char *text_ptr = text_to_display; // bc arrays hate me in C 
         
-    
     // Main file browser loop
     while(1) {
         determine_screen_content_navigation(&text_ptr, 18 * NUM_ENTRIES_TO_SHOW + 1); // fills in text_to_display via text_ptr
@@ -1037,13 +1035,10 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
         }
         else if (!gpio_read(input_single)) {
             show_filesystem_menu(&(current_dir.entry)); // we don't need parent directory information
-        
         }
         delay_ms(200); // debounce
     }
 }
-
-
 
 
 void start_screen(void) {
@@ -1065,7 +1060,7 @@ void start_screen(void) {
         
         display_clear();
         
-        display_write(8, 2, "SUZITI File Browser", WHITE, BLACK, 1);
+        display_write(8, 2, "SUZITI File System", WHITE, BLACK, 1);
         display_draw_line(0, 12, SSD1306_WIDTH, 12, WHITE);
         
         // Draw a cute <3 folder icon using primitive shapes
