@@ -14,7 +14,9 @@
 #include "display.c"
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
-// suze wire colors: TODO
+// suze wire colors: 6: blue, 7: purple, 8: orange, 9: green:, 10: yellow
+
+
 
 #define BUTTON_SINGLE   's'
 #define BUTTON_TOP      't'
@@ -84,19 +86,6 @@ static uint32_t min(uint32_t a, uint32_t b) {
     return b;
 }
 
-//******************************************
-// FUNCTION HEADERS!!
-//******************************************
-
-void navigate_file_system(pi_dirent_t *directory);
-void start_screen(void);
-void setup_directory_info(pi_dirent_t *current_dir);
-int show_pbm_menu(void);
-
-//******************************************
-// FUNCTIONS!!
-//******************************************
-
 void ls(pi_dirent_t *directory) {
     pi_directory_t files = fat32_readdir(&fs, directory);
     printk("Got %d files.\n", files.ndirents);
@@ -111,6 +100,18 @@ void ls(pi_dirent_t *directory) {
     }
 }
 
+//******************************************
+// FUNCTION HEADERS!!
+//******************************************
+
+void navigate_file_system(pi_dirent_t *directory);
+void start_screen(void);
+void setup_directory_info(pi_dirent_t *current_dir);
+int show_pbm_menu(void);
+
+//******************************************
+// FUNCTIONS!!
+//******************************************
 
 void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
     display_clear();
@@ -126,6 +127,7 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
 
     delay_ms(600);
 }
+
 
 
 void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
@@ -257,7 +259,14 @@ void create_file(pi_dirent_t *directory) {
 }
 
 
+// Function prototype for the menu
+int show_pbm_menu(void);
+
+/**
+ * Update the display to show drawing status
+ */
 void display_show_drawing_status(int drawing_mode) {
+    // Prepare drawing mode indicator
     char status[20];
     snprintk(status, sizeof(status), "Mode: %s", 
              drawing_mode ? "DRAWING" : "NAVIGATE");
@@ -272,31 +281,28 @@ void display_show_drawing_status(int drawing_mode) {
 
 int show_pbm_menu(void) {
     uint8_t selected_item = 1;
-    uint8_t NUM_MENU_OPTIONS = 3;
+    uint8_t NUM_MENU_OPTIONS = 4;
 
     while(1) {
         display_clear();
         
+        // Menu display stuff
         display_write(10, 0, "PBM Edit Menu", WHITE, BLACK, 1);
         display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
         display_draw_char(6, selected_item*10 + 5, '>', WHITE, BLACK, 1);
         display_write(12, 15, "Navigate Mode", WHITE, BLACK, 1);
         display_write(12, 25, "Draw Mode", WHITE, BLACK, 1);
-        display_write(12, 35, "Exit File", WHITE, BLACK, 1);
-
+        display_write(12, 35, "Save File", WHITE, BLACK, 1);
+        display_write(12, 45, "Exit File", WHITE, BLACK, 1);
         display_draw_line(0, SSD1306_HEIGHT-9, SSD1306_WIDTH, SSD1306_HEIGHT-9, WHITE);
         display_write(0, SSD1306_HEIGHT-8, "^v:Move >:Select *:Back", WHITE, BLACK, 1);
 
         display_update();
         
-        while (gpio_read(input_left) && gpio_read(input_right) && 
-               gpio_read(input_top) && gpio_read(input_bottom) && 
-               gpio_read(input_single)) {
-            delay_ms(50);
-        }
+        // Wait for button press
+        delay_ms(150);
         
         if (!gpio_read(input_right)) {
-            // select
             return selected_item;
         }
         else if (!gpio_read(input_bottom)) {
@@ -308,125 +314,207 @@ int show_pbm_menu(void) {
             delay_ms(150);
         }
         else if (!gpio_read(input_single)) {
-            // return to prev screen
             return 0;
         }
     }
 }
 
-/**
- * Display PBM file with editing capabilities
- */
-void display_pbm(pi_file_t *file, const char *filename) {
-    // display image + header info
-    display_draw_pbm((uint8_t*)file->data, file->n_data);
-    display_write(10, 0, filename, WHITE, BLACK, 1);
-    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+int save_pbm_file(fat32_fs_t *fs, pi_dirent_t *directory, const char *filename, pi_file_t *original_file, uint8_t *edit_buffer) {
+    // Hardcode dimensions since we know it's 16x16
+    int width = 16;
+    int height = 16;
+    
+    // Calculate display offsets
+    int x_offset = (SSD1306_WIDTH - width) / 2;
+    int y_offset = (SSD1306_HEIGHT - height) / 2;
+    
+    // Allocate buffer for new file
+    char *new_file = kmalloc(1024);  // More than enough for a 16x16 PBM
+    if (!new_file) return 0;
+    
+    // Create header manually with explicit newlines
+    int file_pos = 0;
+    new_file[file_pos++] = 'P';
+    new_file[file_pos++] = '1';
+    new_file[file_pos++] = '\n';
+    new_file[file_pos++] = '1';
+    new_file[file_pos++] = '6';
+    new_file[file_pos++] = ' ';
+    new_file[file_pos++] = '1';
+    new_file[file_pos++] = '6';
+    new_file[file_pos++] = '\n';
+    
+    // Copy pixels, manually formatted
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            // Get pixel from display buffer
+            int screen_x = x_offset + x;
+            int screen_y = y_offset + y;
+            uint16_t byte_idx = screen_x + (screen_y / 8) * SSD1306_WIDTH;
+            uint8_t bit_pos = screen_y % 8;
+            uint8_t pixel = (edit_buffer[byte_idx] >> bit_pos) & 0x01;
+            
+            char pbm_pixel = pixel ? '1' : '0'; // this used to be reversed
 
-    // copy display buf for edits
+
+            new_file[file_pos++] = pbm_pixel;
+            
+            // Add space except at end of line
+            if (x < width - 1) {
+                new_file[file_pos++] = ' ';
+            }
+        }
+        
+        // Add newline except after last row
+        if (y < height - 1) {
+            new_file[file_pos++] = '\n';
+        }
+    }
+    
+    pi_file_t new_file_struct = {
+        .data = (uint8_t*)new_file,
+        .n_data = file_pos,
+        .n_alloc = 1024
+    };
+    
+    int result = fat32_write(fs, directory, (char*)filename, &new_file_struct);
+    return result;
+}
+
+
+void display_pbm(pi_file_t *file, const char *filename, fat32_fs_t *fs, pi_dirent_t *directory) {
+    // Hardcode dimensions since we know it's a 16x16 maze
+    int width = 16;
+    int height = 16;
+    
+    int x_offset = (SSD1306_WIDTH - width) / 2;
+    int y_offset = (SSD1306_HEIGHT - height) / 2;
+    
+    display_clear();
+    display_draw_pbm((uint8_t*)file->data, file->n_data);
+    
+    // Create a copy of the display buffer for editing
     static uint8_t edit_buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8];
     memcpy(edit_buffer, buffer, sizeof(edit_buffer));
     
-    // reset cursor and turn drawing mode off
-    cursor_x = 0; 
-    cursor_y = 12;
+    display_write(10, 0, filename, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+    display_draw_rect(x_offset-1, y_offset-1, width+2, height+2, WHITE);
+    
+    // Reset cursor and drawing mode
+    cursor_x = x_offset + width/2;   // Start in the middle of the image
+    cursor_y = y_offset + height/2;  // Start in the middle of the image
     drawing_mode = DRAWING_MODE_OFF;
-    
-    // bounds check for cursor
-    int bottom_boundary = SSD1306_HEIGHT - 20; // margin to stay above status area
-    
-    // show status of drawing & the cursor
+
     display_show_drawing_status(drawing_mode);
     display_draw_cursor(cursor_x, cursor_y, drawing_mode);
     display_update();
     
-    // i/o loop
+    // Control loop
     while(1) {
         delay_ms(100);
         
         int cursor_moved = 0;
-        
+        // all this logic is to make sure cursor can't move across boundary
         if (!gpio_read(input_left)) {
-            // move left
-            if (cursor_x > 0) {
+            if (cursor_x > x_offset) {
                 cursor_x -= cursor_speed;
                 cursor_moved = 1;
             }
         }
         else if (!gpio_read(input_right)) {
-            // move right
-            if (cursor_x < SSD1306_WIDTH - 1) {
+            if (cursor_x < x_offset + width - 1) {
                 cursor_x += cursor_speed;
                 cursor_moved = 1;
             }
         }
-        else if (!gpio_read(input_bottom)) {
-            // move down 
-            if (cursor_y < bottom_boundary) { // bounds check for bottom
-                cursor_y += cursor_speed;
-                cursor_moved = 1;
-            }
-        }
         else if (!gpio_read(input_top)) {
-            // move up
-            if (cursor_y > 10) { // bounds check for header
+            if (cursor_y > y_offset) {
                 cursor_y -= cursor_speed;  
                 cursor_moved = 1;
             }
         }
+        else if (!gpio_read(input_bottom)) {
+            if (cursor_y < y_offset + height - 1) {
+                cursor_y += cursor_speed;
+                cursor_moved = 1;
+            }
+        }
         else if (!gpio_read(input_single)) {
-            // show menu
-            delay_ms(200);
             int choice = show_pbm_menu();
+            
             switch(choice) {
-                case 1: //  navigate mode (not drawing, but can move cursor)
+                case 1: // Navigate mode
                     drawing_mode = DRAWING_MODE_OFF;
                     break;
                     
-                case 2: // enter draw mode
+                case 2: // Draw mode
                     drawing_mode = DRAWING_MODE_ON;
                     break;
                     
-                case 3: // save and quit file
-                    // TODO SAVE FILE!!
+                case 3: // Save file
+                    // Save the current edit to the file system
+                    display_clear();
+                    display_write(10, 20, "Saving file...", WHITE, BLACK, 1);
+                    display_update();
+                    
+                    if (save_pbm_file(fs, directory, filename, file, edit_buffer)) {
+                        display_write(10, 30, "File saved!", WHITE, BLACK, 1);
+                    } else {
+                        display_write(10, 30, "Save failed!", WHITE, BLACK, 1);
+                    }
+                    display_update();
+                    delay_ms(2000);
+                    break;
+                    
+                case 4: // Exit file
                     return;
                     
                 default:
                     break;
             }
             
-            // redraw screen after menu selection
+            // Redraw the screen after menu selection
             memcpy(buffer, edit_buffer, sizeof(buffer));
+            display_write(10, 0, filename, WHITE, BLACK, 1);
+            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+            display_draw_rect(x_offset-1, y_offset-1, width+2, height+2, WHITE);
             display_show_drawing_status(drawing_mode);
             display_draw_cursor(cursor_x, cursor_y, drawing_mode);
             display_update();
             
             delay_ms(150);
-            continue; // skip to next iteration and dont check other if statements below
+            continue;
         }
         
-        // cursor moved while in drawing mode --> draw a pixel
+        // If cursor moved and in drawing mode, draw a pixel (only if within PBM boundaries)
         if (cursor_moved && drawing_mode) {
-            uint16_t byte_idx = cursor_x + (cursor_y / 8) * SSD1306_WIDTH;
-            uint8_t bit_pos = cursor_y % 8;
-            edit_buffer[byte_idx] |= (1 << bit_pos); // while pixel
+            // Only draw if cursor is within the PBM boundaries
+            if (cursor_x >= x_offset && cursor_x < x_offset + width &&
+                cursor_y >= y_offset && cursor_y < y_offset + height) {
+                
+                // Calculate buffer position
+                uint16_t byte_idx = cursor_x + (cursor_y / 8) * SSD1306_WIDTH;
+                uint8_t bit_pos = cursor_y % 8;
+                
+                // Set pixel to WHITE
+                edit_buffer[byte_idx] |= (1 << bit_pos);
+            }
         }
         
-        // only redraw cursor position if cursor position changed
+        // Only redisplay if position changed
         if (cursor_moved) {
-            // restore the buffer from our edit buffer
+            // Restore the buffer from our edit buffer
             memcpy(buffer, edit_buffer, sizeof(buffer));
-            
-            // redraw the header again
+            display_write(10, 0, filename, WHITE, BLACK, 1);
+            display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+            display_draw_rect(x_offset-1, y_offset-1, width+2, height+2, WHITE);
             display_show_drawing_status(drawing_mode);
-            
-            // redraw cursor at new pos
             display_draw_cursor(cursor_x, cursor_y, drawing_mode);
             display_update();
         }
     }
 }
-
 
 void show_filesystem_menu(pi_dirent_t *current_dir) {
     printk(" in show menu! \n\n");
@@ -648,7 +736,6 @@ void display_text(pi_file_t *file, const char *filename) {
     }
 }
 
-
 void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
     trace("about to display file %s\n", file_dirent->name);
     if (!file_dirent || file_dirent->is_dir_p) {
@@ -674,12 +761,15 @@ void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file
 
     // Check if this is a PBM file
     if (is_pbm_file(file_dirent->name)) {
-        display_pbm(file, file_dirent->name);
+        display_pbm(file, file_dirent->name, fs, directory);
     }
     else {
         display_text(file, file_dirent->name); // for displaying normal text file
     }
 }
+
+
+
 
 void setup_directory_info(pi_dirent_t *current_dir_entry) {
     trace("entering setup_directory_info\n");
