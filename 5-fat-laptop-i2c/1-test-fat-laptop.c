@@ -1,13 +1,3 @@
-// TODO 
-// 1. setup_directory_info (fills in global values), determine_screen_content (fills array), display_file_navigation
-//      ^ use these functions and printk debug why newly created files/dirs/duplications won't show up as soon as they're created
-
-// 3. save pbm edits to file!
-
-// 4. test create folder + file rigorously
-
-// 5. make duplicate file accessible; inside the text file
-
 #include "display.c"
 
 // aditi wire colors: 6: purple, 7: blue, 8: green, 9: yellow, 10: orange
@@ -95,6 +85,7 @@ void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename)
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines);
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count);
 void dup_file(pi_dirent_t *directory, const char *origin_name) ;
+uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername);
 
 //******************************************
 // FUNCTIONS!!
@@ -339,47 +330,6 @@ void create_file(pi_dirent_t *directory) {
     setup_directory_info(directory); // to set up any new files/dirs which might have been created
     printk("AFTER CREATE FILE:\n");
     ls(directory);
-}
-
-
-uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername) {
-
-    pi_directory_t files = fat32_readdir(&fs, directory);
-    printk("Got %d files.\n", files.ndirents);
-
-    for (int i = 0; i < files.ndirents; i++) {
-      pi_dirent_t *dirent = &files.dirents[i];
-      if (dirent->is_dir_p) {
-        if (strncmp(dirent->name, foldername, 4) == 0) {
-            return 0; // bad!
-        }
-      }
-    }
-    return 1; // good!
-}
-
-void create_dir(pi_dirent_t *directory) {
-    ls(directory);
-
-    // create a foldername; name it with a random number like dirA
-    char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
-    do {
-        foldername[3] = unique_folder_id++; // make sure we create a new foldername!!
-    } while (does_dir_exist(directory, foldername) == 0); // 0 means a dir with that name alr exists
-
-    pi_dirent_t *created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
-
-    display_clear();
-    // Display navigation hints
-    display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
-    display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
-    display_update();
-
-    setup_directory_info(directory); // to set up any new files/dirs which might have been created
-    printk("Created a directory!\n");
-    ls(directory);
-
-    delay_ms(2000);
 }
 
 
