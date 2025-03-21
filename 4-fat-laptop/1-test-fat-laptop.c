@@ -926,9 +926,6 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
     }
 }
 
-
-
-
 void start_screen(void) {
     // Display welcome screen with bouncing ? symbol animation
     int bounce_x = SSD1306_WIDTH / 2;
