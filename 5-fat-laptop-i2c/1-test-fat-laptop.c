@@ -28,7 +28,7 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
-char unique_folder_id = 70; // starts at: "A" // used when creating dirs
+char unique_folder_id = 65; // starts at: "A" // used when creating dirs
 char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
@@ -89,9 +89,10 @@ void navigate_file_system(pi_dirent_t *directory);
 void start_screen(void);
 void setup_directory_info(pi_dirent_t *current_dir);
 int show_pbm_menu(void);
-void display_text(pi_file_t *file, const char *filename);
+void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename);
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines);
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count);
+void dup_file(pi_dirent_t *directory, const char *origin_name) ;
 
 //******************************************
 // FUNCTIONS!!
@@ -112,17 +113,69 @@ void ls(pi_dirent_t *directory) {
 }
 
 //******************************************
-// CREATING FILES & DIRS
+// DUPLICATING A FILE
 //******************************************
 
-void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
+void show_file_dup_menu(pi_dirent_t *current_dir, pi_file_t *file, const char *filename) {
+    printk(" in dup menu! \n\n");
+    delay_ms(200);
+    uint8_t selected_item = 1;
+    uint8_t NUM_MENU_OPTIONS = 1; // dup file
+
+    while(1) {
+        display_clear();
+        // menu selector
+        display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
+
+        // menu options
+        display_write(12, 10, "duplicate file", WHITE, BLACK, 1);
+
+        // control info
+        display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
+        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Select *:Exit", WHITE, BLACK, 1);
+
+        display_update();
+
+        if (!gpio_read(input_right)) {
+            // go into that menu option.
+            switch (selected_item) {
+                case 1: 
+                    dup_file(current_dir, filename);
+                    break;
+                default:
+                    break;
+            }
+            delay_ms(200);
+            return;
+        }
+        else if (!gpio_read(input_bottom)) {
+            if (selected_item < NUM_MENU_OPTIONS) selected_item++;
+            delay_ms(200);
+        }
+        else if (!gpio_read(input_top)) {
+            if (selected_item > 1) selected_item--;
+            delay_ms(200);
+        }
+        else if (!gpio_read(input_single)) {
+            // close menu
+            display_clear();
+            display_update();
+            start_screen(); // go back to start screen
+        }
+    }
+}
+
+
+void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, const char *origin_filename, char *dest_filename) {   
     display_clear();
     display_write(10, 0, "Copying file", WHITE, BLACK, 1);
     display_write(10, 20, origin_filename, WHITE, BLACK, 1); // say which file
     display_write(10, 30, dest_filename, WHITE, BLACK, 1); // say which file
     display_update();
 
-    pi_file_t *file = fat32_read(fs, directory, origin_filename);
+    char *mutable_orign_filename = (char *)origin_filename;
+
+    pi_file_t *file = fat32_read(fs, directory, mutable_orign_filename);
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, dest_filename, file);
 
@@ -130,26 +183,28 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
 }
 
 // TODO add functionality to call this
-void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
+void dup_file(pi_dirent_t *directory, const char *origin_name) { // the raw filename with the extension
     ls(directory);
     
     pi_dirent_t *created_file = NULL;
-    char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
+    char new_filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
     do {
-        filename[4] = unique_dup_id; // make sure we create a new file!!
-        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
+        new_filename[4] = unique_dup_id; // make sure we create a new file!!
+        created_file = fat32_create(&fs, directory, new_filename, 0); // 0=not a directory
         unique_dup_id++; // if needed for the next loop/iteration
     } while (created_file == NULL);
 
-    printk(">>DUPLICATING FILE %s", filename);
-    delay_ms(2000);
-
-    copy_file_contents(&fs, directory, raw_name, filename); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
-
+    printk(">>DUPLICATING FILE %s", new_filename);
+    copy_file_contents(&fs, directory, origin_name, new_filename); 
+    
     ls(directory);
 
     delay_ms(400);
 }
+
+//******************************************
+// CREATING FILES & DIRS
+//******************************************
 
 void display_file_text_while_appending(const char *filename, char **text, int line_count) {
     printk("displaying file while appending\n");
@@ -668,7 +723,7 @@ void display_file_text(const char *filename, char **text, int line_count) {
     display_update();
 }
 
-void display_text(pi_file_t *file, const char *filename) {
+void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename) {
     trace("about to display text file\n");
 
     int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
@@ -712,7 +767,8 @@ void display_text(pi_file_t *file, const char *filename) {
         }
 
         if (!gpio_read(input_single)) {
-            printk("ADITI TODO: open a menu to 1. duplicate or 2. delete the file");
+            show_file_dup_menu(directory, file, filename);
+            printk("ADITI TODO: open a menu to 1. duplicate or (2. delete?) the file");
             delay_ms(150);
         }
         
@@ -748,7 +804,7 @@ void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file
         display_pbm(file, file_dirent->name);
     }
     else {
-        display_text(file, file_dirent->name); // for displaying normal text file
+        display_text(directory, file, file_dirent->name); // for displaying normal text file
     }
 }
 
