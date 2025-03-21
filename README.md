@@ -30,4 +30,5 @@ see 5-fat-laptop-i2c/bitbang-i2c.c
 
 ### Citations:
  - display based on adafruit code examples (in folder in repo)
+ - got symbol displayed on home screen somewhere on reddit
 

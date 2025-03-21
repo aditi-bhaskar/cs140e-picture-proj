@@ -332,11 +332,6 @@ void create_file(pi_dirent_t *directory) {
     ls(directory);
 }
 
-
-//******************************************
-// DRAWING AND PBMs
-//******************************************
-
 uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername) {
 
     pi_directory_t files = fat32_readdir(&fs, directory);
@@ -382,9 +377,6 @@ void create_dir(pi_dirent_t *directory) {
 // DRAWING AND PBMs
 //******************************************
 
-// Function prototype for the menu
-int show_pbm_menu(void);
-
 /**
  * Update the display to show drawing status
  */
@@ -394,11 +386,8 @@ void display_show_drawing_status(int drawing_mode) {
     snprintk(status, sizeof(status), "Mode: %s", 
              drawing_mode ? "DRAWING" : "NAVIGATE");
     
-    // Display the status
     display_write(0, SSD1306_HEIGHT - 16, status, WHITE, BLACK, 1);
     display_draw_line(0, SSD1306_HEIGHT - 18, SSD1306_WIDTH, SSD1306_HEIGHT - 18, WHITE);
-    
-    // Add hint for menu
     display_write(0, SSD1306_HEIGHT - 8, "*:Menu ^v<>:Move", WHITE, BLACK, 1);
 }
 
@@ -422,7 +411,6 @@ int show_pbm_menu(void) {
 
         display_update();
         
-        // Wait for button press
         delay_ms(150);
         
         if (!gpio_read(input_right)) {
@@ -443,7 +431,7 @@ int show_pbm_menu(void) {
 }
 
 int save_pbm_file(fat32_fs_t *fs, pi_dirent_t *directory, const char *filename, pi_file_t *original_file, uint8_t *edit_buffer) {
-    // Hardcode dimensions since we know it's 16x16
+    // Hardcode dimensions for 16x16
     int width = 16;
     int height = 16;
     
@@ -452,10 +440,10 @@ int save_pbm_file(fat32_fs_t *fs, pi_dirent_t *directory, const char *filename, 
     int y_offset = (SSD1306_HEIGHT - height) / 2;
     
     // Allocate buffer for new file
-    char *new_file = kmalloc(1024);  // More than enough for a 16x16 PBM
+    char *new_file = kmalloc(1024); // possibly edit if changing to bigger than 16x16 
     if (!new_file) return 0;
     
-    // Create header manually with explicit newlines
+    // again hardcoding 16x16
     int file_pos = 0;
     new_file[file_pos++] = 'P';
     new_file[file_pos++] = '1';
@@ -476,9 +464,7 @@ int save_pbm_file(fat32_fs_t *fs, pi_dirent_t *directory, const char *filename, 
             uint16_t byte_idx = screen_x + (screen_y / 8) * SSD1306_WIDTH;
             uint8_t bit_pos = screen_y % 8;
             uint8_t pixel = (edit_buffer[byte_idx] >> bit_pos) & 0x01;
-            
-            char pbm_pixel = pixel ? '1' : '0'; // this used to be reversed
-
+            char pbm_pixel = pixel ? '1' : '0'; // this used to be reversed; wait i think this is now redundant
 
             new_file[file_pos++] = pbm_pixel;
             
@@ -535,6 +521,7 @@ void display_pbm(pi_file_t *file, const char *filename, fat32_fs_t *fs, pi_diren
     
     // Control loop
     while(1) {
+        // wait for button press
         delay_ms(100);
         
         int cursor_moved = 0;
@@ -875,7 +862,6 @@ void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename)
 void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file_dirent) {
     trace("about to display file %s\n", file_dirent->name);
     if (!file_dirent || file_dirent->is_dir_p) {
-        // Not a valid file
         display_clear();
         display_write(10, 20, "Not a valid file", WHITE, BLACK, 1);
         display_update();
@@ -883,7 +869,6 @@ void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file
         return;
     }
 
-    // Read the file
     trace("attempt to read file\n", file_dirent->name);
     pi_file_t *file = fat32_read(fs, directory, file_dirent->name);
     if (!file) {
@@ -895,23 +880,18 @@ void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file
     }
     trace("finished reading file\n", file_dirent->name);
 
-    // Check if this is a PBM file
     if (is_pbm_file(file_dirent->name)) {
         display_pbm(file, file_dirent->name, fs, directory);
     }
     else {
-        display_text(directory, file, file_dirent->name); // for displaying normal text file
+        display_text(directory, file, file_dirent->name);
     }
 }
-
-
-
 
 void setup_directory_info(pi_dirent_t *current_dir_entry) {
     trace("entering setup_directory_info\n");
     selected_index = 0;  // Reset selection
     top_index = 0;       // Reset view position
-    // Read current directory contents; this setup happens everywhere
     files = fat32_readdir(&fs, current_dir_entry);
     total_entries = files.ndirents;
     trace("Got %d files.\n", files.ndirents);
@@ -928,7 +908,7 @@ void setup_directory_info(pi_dirent_t *current_dir_entry) {
     ls(current_dir_entry); // debug stuff
 
     // Handle empty directories (after filtering)
-    if (adjusted_total == 0) { // TODO: is this in the right location?? suze
+    if (adjusted_total == 0) {
         display_clear();
         display_write(10, 20, "Empty directory", WHITE, BLACK, 1);
         display_update();
@@ -943,11 +923,9 @@ void setup_directory_info(pi_dirent_t *current_dir_entry) {
 }
 
 void determine_screen_content_navigation(char **text, size_t buffer_size) {
-    // determining what to show on screen (which files etc.)
     bot_index = min(top_index + NUM_ENTRIES_TO_SHOW - 1, adjusted_total - 1);
     char *text_to_display = *text;
         
-    // Build the display text
     text_to_display[0] = '\0';
     int text_pos = 0;
     
@@ -978,7 +956,6 @@ void determine_screen_content_navigation(char **text, size_t buffer_size) {
                 text_to_display[text_pos++] = '/';
             }
             
-            // Copy filename
             int j = 0;
             // Skip trailing spaces when displaying
             int last_non_space = -1;
@@ -1039,7 +1016,7 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
     current_dir.parent = NULL;  // Root has no parent
     setup_directory_info(&current_dir.entry);
 
-    char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
+    char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1];
     char *text_ptr = text_to_display; // bc arrays hate me in C 
         
     // Main file browser loop
@@ -1163,7 +1140,7 @@ void start_screen(void) {
         display_write(8, 2, "SUZITI File System", WHITE, BLACK, 1);
         display_draw_line(0, 12, SSD1306_WIDTH, 12, WHITE);
         
-        // Draw a cute <3 folder icon using primitive shapes
+        // Draw a cute <3 folder icon
         display_fill_rect(bounce_x - 7, bounce_y - 4, 14, 10, WHITE);
         display_fill_rect(bounce_x - 5, bounce_y - 6, 10, 2, WHITE);
         display_fill_rect(bounce_x - 6, bounce_y - 3, 12, 8, BLACK);
