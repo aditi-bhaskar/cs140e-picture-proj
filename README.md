@@ -1,3 +1,6 @@
+## SUZITI File System
+
+
 ### Code:
 Our final "make"-able code run during project demos is in 5-fat-laptop-i2c/. All other folders hold different stages of the project. We have a draft writeup for the display device here.
 
