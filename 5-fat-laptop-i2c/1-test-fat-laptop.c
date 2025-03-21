@@ -1,9 +1,6 @@
 // TODO 
-// 1. setup_directory_info (fills in glo values), determine_screen_content (fills array), display_file_navigation
+// 1. setup_directory_info (fills in global values), determine_screen_content (fills array), display_file_navigation
 //      ^ use these functions and printk debug why newly created files/dirs/duplications won't show up as soon as they're created
-
-// 2. make creating a file pretty, so it types exactly in the file, (and auto-scrolls)? --> 
-//      can display instructions briefly, and then just type into file and display file??
 
 // 3. save pbm edits to file!
 
@@ -33,7 +30,7 @@
 
 
 char unique_file_id = 65; // starts at: "A" // used when creating files
-char unique_folder_id = 70; // starts at: "A" // used when creating dirs
+char unique_folder_id = 65; // starts at: "A" // used when creating dirs
 char unique_dup_id = 65; // starts at: "A" // used when duplicating files
 
 // for all functions; this should never change
@@ -86,6 +83,23 @@ static uint32_t min(uint32_t a, uint32_t b) {
     return b;
 }
 
+//******************************************
+// FUNCTION HEADERS!!
+//******************************************
+
+void navigate_file_system(pi_dirent_t *directory);
+void start_screen(void);
+void setup_directory_info(pi_dirent_t *current_dir);
+int show_pbm_menu(void);
+void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename);
+int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines);
+void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count);
+void dup_file(pi_dirent_t *directory, const char *origin_name) ;
+
+//******************************************
+// FUNCTIONS!!
+//******************************************
+
 void ls(pi_dirent_t *directory) {
     pi_directory_t files = fat32_readdir(&fs, directory);
     printk("Got %d files.\n", files.ndirents);
@@ -100,28 +114,66 @@ void ls(pi_dirent_t *directory) {
     }
 }
 
-//******************************************
-// FUNCTION HEADERS!!
-//******************************************
+void show_file_dup_menu(pi_dirent_t *current_dir, pi_file_t *file, const char *filename) {
+    printk(" in dup menu! \n\n");
+    delay_ms(200);
+    uint8_t selected_item = 1;
+    uint8_t NUM_MENU_OPTIONS = 1; // dup file
 
-void navigate_file_system(pi_dirent_t *directory);
-void start_screen(void);
-void setup_directory_info(pi_dirent_t *current_dir);
-int show_pbm_menu(void);
+    while(1) {
+        display_clear();
+        // menu selector
+        display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
 
-//******************************************
-// FUNCTIONS!!
-//******************************************
+        // menu options
+        display_write(12, 10, "duplicate file", WHITE, BLACK, 1);
 
-void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_filename, char *dest_filename) {   
+        // control info
+        display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
+        display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Select *:Exit", WHITE, BLACK, 1);
+
+        display_update();
+
+        if (!gpio_read(input_right)) {
+            // go into that menu option.
+            switch (selected_item) {
+                case 1: 
+                    dup_file(current_dir, filename);
+                    break;
+                default:
+                    break;
+            }
+            delay_ms(200);
+            return;
+        }
+        else if (!gpio_read(input_bottom)) {
+            if (selected_item < NUM_MENU_OPTIONS) selected_item++;
+            delay_ms(200);
+        }
+        else if (!gpio_read(input_top)) {
+            if (selected_item > 1) selected_item--;
+            delay_ms(200);
+        }
+        else if (!gpio_read(input_single)) {
+            // close menu
+            display_clear();
+            display_update();
+            start_screen(); // go back to start screen
+        }
+    }
+}
+
+
+void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, const char *origin_filename, char *dest_filename) {   
     display_clear();
-    display_write(10, 0, "Appending to file", WHITE, BLACK, 1);
+    display_write(10, 0, "Copying file", WHITE, BLACK, 1);
     display_write(10, 20, origin_filename, WHITE, BLACK, 1); // say which file
     display_write(10, 30, dest_filename, WHITE, BLACK, 1); // say which file
-    // display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
     display_update();
 
-    pi_file_t *file = fat32_read(fs, directory, origin_filename);
+    char *mutable_orign_filename = (char *)origin_filename;
+
+    pi_file_t *file = fat32_read(fs, directory, mutable_orign_filename);
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, dest_filename, file);
 
@@ -129,44 +181,98 @@ void copy_file_contents(fat32_fs_t *fs, pi_dirent_t *directory, char *origin_fil
 }
 
 
-
-void dup_file(pi_dirent_t *directory, char *raw_name) { // the raw filename with the extension
+// TODO add functionality to call this
+void dup_file(pi_dirent_t *directory, const char *origin_name) { // the raw filename with the extension
     ls(directory);
     
     pi_dirent_t *created_file = NULL;
-    char filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
+    char new_filename[10] = {'D','U','P','E',unique_dup_id,'.','T','X','T','\0'};
     do {
-        filename[4] = unique_dup_id; // make sure we create a new file!!
-        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
+        new_filename[4] = unique_dup_id; // make sure we create a new file!!
+        created_file = fat32_create(&fs, directory, new_filename, 0); // 0=not a directory
         unique_dup_id++; // if needed for the next loop/iteration
     } while (created_file == NULL);
 
-    printk(">>DUPLICATING FILE %s", filename);
-    delay_ms(2000);
-
-    copy_file_contents(&fs, directory, raw_name, filename); // add nothing to the file. maybe this adds a \0?? idc TODO fix?
-
+    printk(">>DUPLICATING FILE %s", new_filename);
+    copy_file_contents(&fs, directory, origin_name, new_filename); 
+    
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
     ls(directory);
 
     delay_ms(400);
 }
 
+//******************************************
+// CREATING FILES & DIRS
+//******************************************
 
+void display_file_text_while_appending(const char *filename, char **text, int line_count) {
+    printk("displaying file while appending\n");
+    char *display_buffer = *text;
+    // clear display
+    display_clear();
+        
+    // write file name at the top 
+    display_write(10, 0, filename, WHITE, BLACK, 1);
+    display_draw_line(0, 10, SSD1306_WIDTH, 10, WHITE);
+    
+    // write file content
+    display_write(0, 12, display_buffer, WHITE, BLACK, 1);
+    
+    // add scroll indicators if needed
+    if (current_start_line > 0) {
+        display_write(SSD1306_WIDTH - 8, 0, "^", WHITE, BLACK, 1);
+    }
+    
+    if (current_start_line + lines_per_screen < line_count) {
+        display_write(SSD1306_WIDTH - 8, SSD1306_HEIGHT - 8, "v", WHITE, BLACK, 1);
+    }
+    
+    // add navigation help at bottom
+    display_write(0, SSD1306_HEIGHT - 8, "<^v>:Write *:Exit", WHITE, BLACK, 1);
+    display_draw_line(0, SSD1306_HEIGHT - 10, SSD1306_WIDTH, SSD1306_HEIGHT - 10, WHITE);
+    
+    display_update();
+}
+
+void display_text_while_appending(pi_file_t *file, const char *filename) {
+    trace("about to display text file\n");
+
+    int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
+    int *line_positions = kmalloc(sizeof(int) * estimated_lines);
+    int line_count = split_text_up(&line_positions, file, estimated_lines); // populates line_positions
+    
+    // buf for displayed text
+    char display_buffer[512];
+    char *display_buffer_ptr = display_buffer;
+    
+    // init the starting line index (used for scrolling)
+    current_start_line = 0;
+    
+    while ( (current_start_line + lines_per_screen) < line_count ) {          
+        // Scroll down one line at a time
+        current_start_line++;
+    } 
+    determine_screen_content_file(&display_buffer_ptr, 512, file, line_positions, line_count);
+    display_file_text_while_appending(filename, &display_buffer_ptr, line_count);
+    
+}
     
 void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char* append_me) {
-    display_clear();
-    display_write(10, 10, "Appending to file", WHITE, BLACK, 1);
-    display_write(10, 30, filename, WHITE, BLACK, 1); // say which file
-    display_write(10, 40, append_me, WHITE, BLACK, 1); // say what's being appended
-    display_update();
 
-    // TODO show file here!!
     printk("Reading file\n");
     pi_file_t *file = fat32_read(fs, directory, filename);
+
+    if  (file == NULL) printk ("FILE NOT FOUND -- CANT READ IT!!");
     char *data_old = file->data;
 
     // write : "append me" to the file
     char data[strlen(data_old) + strlen(append_me)+ 1];
+    data[strlen(data_old) + strlen(append_me)] = '\0';
+
+    printk ("filename: %s\n", filename);
+    printk("\n\n\nold data contents = %s\n", data_old);
+    printk("append me contents = %s\n", append_me);
     strcpy(data, data_old);   // Copy old data
     strcat(data, append_me);  // Append new data
     printk("data contents = %s\n", data);
@@ -180,32 +286,12 @@ void append_to_file(fat32_fs_t *fs, pi_dirent_t *directory, char *filename, char
     printk("writing to fat\n");
     int writ = fat32_write(fs, directory, filename, &new_file_contents);
 
-    delay_ms(600);
-}
-
-
-void create_dir(pi_dirent_t *directory) {
-    ls(directory);
-
-    // doesn't create file if file alr exists
-    pi_dirent_t *created_folder = NULL;
-    // create a file; name it a random number like dirA
-    char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
-    do {
-        created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
-        foldername[3] = unique_folder_id++; // make sure we create a new file!!
-    } while (created_folder == NULL);
-
-    display_clear();
-    // Display navigation hints
-    display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
-    display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
-    display_update();
-
-    printk("Created a directory!\n");
-    ls(directory);
-
-    delay_ms(2000);
+    printk("writing to screen\n");
+    pi_file_t *file_read = fat32_read(fs, directory, filename);
+    if (file_read == NULL) printk ("THE FILE IS NULL!!!\n");
+    printk("fileread contents: %s", file_read->data);
+    printk(".\n"); // incase prev line was empty spaces or smth
+    display_text_while_appending(file_read, filename);    
 }
 
 void create_file(pi_dirent_t *directory) {
@@ -216,20 +302,19 @@ void create_file(pi_dirent_t *directory) {
     // create a file; name it a random number like demoLETTER
     char filename[10] = {'D','E','M','O',unique_file_id,'.','T','X','T','\0'};
     do {
-        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
         filename[4] = unique_file_id++; // make sure we create a new file!!
+        created_file = fat32_create(&fs, directory, filename, 0); // 0=not a directory
     } while (created_file == NULL);
     
     delay_ms(400);
 
+    // display navigation hints
+    display_clear();
+    display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
+    display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
+    display_update();
     while(1) {
         printk("in create_file, waiting\n");
-        display_clear();
-        // display navigation hints
-        display_write(0, SSD1306_HEIGHT - 16, "<^v> : write to file", WHITE, BLACK, 1);
-        display_write(0, SSD1306_HEIGHT - 8, "* : to exit", WHITE, BLACK, 1);
-        display_update();
-
         // exit file writing
         if (!gpio_read(input_single)) {
             // exit file creation return
@@ -237,8 +322,6 @@ void create_file(pi_dirent_t *directory) {
             delay_ms(200);
             break;
         }
-
-        // TODO display this stuff on screen as im writing???
 
         // these buttons write to file
         if (!gpio_read(input_left)) {
@@ -253,11 +336,101 @@ void create_file(pi_dirent_t *directory) {
         delay_ms(200);
 
     }
-
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
     printk("AFTER CREATE FILE:\n");
     ls(directory);
 }
 
+
+uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername) {
+
+    pi_directory_t files = fat32_readdir(&fs, directory);
+    printk("Got %d files.\n", files.ndirents);
+
+    for (int i = 0; i < files.ndirents; i++) {
+      pi_dirent_t *dirent = &files.dirents[i];
+      if (dirent->is_dir_p) {
+        if (strncmp(dirent->name, foldername, 4) == 0) {
+            return 0; // bad!
+        }
+      }
+    }
+    return 1; // good!
+}
+
+void create_dir(pi_dirent_t *directory) {
+    ls(directory);
+
+    // create a foldername; name it with a random number like dirA
+    char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
+    do {
+        foldername[3] = unique_folder_id++; // make sure we create a new foldername!!
+    } while (does_dir_exist(directory, foldername) == 0); // 0 means a dir with that name alr exists
+
+    pi_dirent_t *created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
+
+    display_clear();
+    // Display navigation hints
+    display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
+    display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
+    display_update();
+
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
+    printk("Created a directory!\n");
+    ls(directory);
+
+    delay_ms(2000);
+}
+
+
+//******************************************
+// DRAWING AND PBMs
+//******************************************
+
+uint8_t does_dir_exist(pi_dirent_t *directory, char *foldername) {
+
+    pi_directory_t files = fat32_readdir(&fs, directory);
+    printk("Got %d files.\n", files.ndirents);
+
+    for (int i = 0; i < files.ndirents; i++) {
+      pi_dirent_t *dirent = &files.dirents[i];
+      if (dirent->is_dir_p) {
+        if (strncmp(dirent->name, foldername, 4) == 0) {
+            return 0; // bad!
+        }
+      }
+    }
+    return 1; // good!
+}
+
+void create_dir(pi_dirent_t *directory) {
+    ls(directory);
+
+    // create a foldername; name it with a random number like dirA
+    char foldername[5] = {'D','I','R',unique_folder_id,'\0'};
+    do {
+        foldername[3] = unique_folder_id++; // make sure we create a new foldername!!
+    } while (does_dir_exist(directory, foldername) == 0); // 0 means a dir with that name alr exists
+
+    pi_dirent_t *created_folder = fat32_create(&fs, directory, foldername, 1); // 1 = create a directory
+
+    display_clear();
+    // Display navigation hints
+    display_write(10, SSD1306_HEIGHT - 8*3, "creating dir", WHITE, BLACK, 1);
+    display_write(10, SSD1306_HEIGHT - 8*2, foldername, WHITE, BLACK, 1);
+    display_update();
+
+    setup_directory_info(directory); // to set up any new files/dirs which might have been created
+    printk("Created a directory!\n");
+    ls(directory);
+
+    delay_ms(2000);
+}
+
+
+//******************************************
+// DRAWING AND PBMs
+//******************************************
 
 // Function prototype for the menu
 int show_pbm_menu(void);
@@ -516,6 +689,10 @@ void display_pbm(pi_file_t *file, const char *filename, fat32_fs_t *fs, pi_diren
     }
 }
 
+//******************************************
+// FILE NAVIGATION AND MENU
+//******************************************
+
 void show_filesystem_menu(pi_dirent_t *current_dir) {
     printk(" in show menu! \n\n");
     delay_ms(200);
@@ -527,18 +704,14 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
         display_clear();
         // menu selector
         display_draw_char(6, selected_item*10, '>', WHITE, BLACK, 1);
-
         // menu options
         display_write(12, 10, "create file", WHITE, BLACK, 1);
         display_write(12, 20, "create directory ", WHITE, BLACK, 1);
-
         // control info
         display_draw_line(0, SSD1306_HEIGHT-(6 * 3)-1, SSD1306_WIDTH, SSD1306_HEIGHT-(6 * 3)-1, WHITE);
         display_write(2, SSD1306_HEIGHT-(6 * 3), "^v:Move >:Select *:Exit", WHITE, BLACK, 1);
-
         display_update();
 
-        
         if (!gpio_read(input_right)) {
             // go into that menu option.
             switch (selected_item) {
@@ -567,9 +740,11 @@ void show_filesystem_menu(pi_dirent_t *current_dir) {
             display_clear();
             display_update();
             navigate_file_system(current_dir);
+            printk("SETTING UP THE DIR INFO!! ON EXITING CREATE F/D\n\n");
             setup_directory_info(current_dir); // to set up any new files/dirs which might have been created
         }
     }
+
 }
 
 int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines) {
@@ -620,6 +795,9 @@ int split_text_up(int **line_positions_ptr, pi_file_t *file, int estimated_lines
 }
 
 void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *file, int *line_positions, int line_count) {
+    
+    printk("in determine_screen_content_file\n");
+
     char *display_buffer = *text;
     display_buffer[0] = '\0';
     int buf_pos = 0;
@@ -660,6 +838,9 @@ void determine_screen_content_file(char **text, size_t buffer_size, pi_file_t *f
 }
 
 
+//******************************************
+// FILE & DIR READING
+//******************************************
 
 void display_file_text(const char *filename, char **text, int line_count) {
     char *display_buffer = *text;
@@ -689,8 +870,8 @@ void display_file_text(const char *filename, char **text, int line_count) {
     display_update();
 }
 
-void display_text(pi_file_t *file, const char *filename) {
-    trace("about to display text file");
+void display_text(pi_dirent_t *directory, pi_file_t *file, const char *filename) {
+    trace("about to display text file\n");
 
     int estimated_lines = (file->n_data / MAX_CHARS_PER_LINE) + file->n_data / 20 + 10;  // Overestimate to be safe
     int *line_positions = kmalloc(sizeof(int) * estimated_lines);
@@ -731,6 +912,11 @@ void display_text(pi_file_t *file, const char *filename) {
             current_start_line++;
             delay_ms(150);
         }
+
+        if (!gpio_read(input_single)) {
+            show_file_dup_menu(directory, file, filename);
+            delay_ms(150);
+        }
         
         delay_ms(200); // debouncing
     }
@@ -764,7 +950,7 @@ void display_something(fat32_fs_t *fs, pi_dirent_t *directory, pi_dirent_t *file
         display_pbm(file, file_dirent->name, fs, directory);
     }
     else {
-        display_text(file, file_dirent->name); // for displaying normal text file
+        display_text(directory, file, file_dirent->name); // for displaying normal text file
     }
 }
 
@@ -906,7 +1092,6 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
     char text_to_display[18 * NUM_ENTRIES_TO_SHOW + 1]; // Max filename(16) + selector(1) + newline(1) + null(1)
     char *text_ptr = text_to_display; // bc arrays hate me in C 
         
-    
     // Main file browser loop
     while(1) {
         determine_screen_content_navigation(&text_ptr, 18 * NUM_ENTRIES_TO_SHOW + 1); // fills in text_to_display via text_ptr
@@ -1000,13 +1185,10 @@ void navigate_file_system(pi_dirent_t *starting_directory) {
         }
         else if (!gpio_read(input_single)) {
             show_filesystem_menu(&(current_dir.entry)); // we don't need parent directory information
-        
         }
         delay_ms(200); // debounce
     }
 }
-
-
 
 
 void start_screen(void) {
@@ -1028,7 +1210,7 @@ void start_screen(void) {
         
         display_clear();
         
-        display_write(8, 2, "SUZITI File Browser", WHITE, BLACK, 1);
+        display_write(8, 2, "SUZITI File System", WHITE, BLACK, 1);
         display_draw_line(0, 12, SSD1306_WIDTH, 12, WHITE);
         
         // Draw a cute <3 folder icon using primitive shapes
@@ -1060,6 +1242,10 @@ void start_screen(void) {
     }
 }
 
+
+//******************************************
+// NOTMAIN
+//******************************************
 
 void notmain(void) {
     trace("Initializing display at I2C address 0x%x\n", SSD1306_I2C_ADDR);

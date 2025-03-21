@@ -97,6 +97,7 @@ int i2c_write(unsigned addr, uint8_t data[], unsigned nbytes) {
 
     // stop if no ack
     if (!i2c_write_byte(addr << 1)) {
+        printk("ERROR! NO DEVICE ACK ON WRITE!");
         i2c_stop();
         return 0; 
     }
@@ -120,6 +121,7 @@ int i2c_read(unsigned addr, uint8_t data[], unsigned nbytes) {
     
     // stop if the device doesn't ack a read request
     if (!i2c_write_byte((addr << 1) | 1)) { 
+        printk("ERROR! NO DEVICE ACK ON READ!");
         i2c_stop();
         return 0;
     }
