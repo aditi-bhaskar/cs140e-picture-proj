@@ -1,4 +1,5 @@
 ## SUZITI File System
+ - ON GITHUB: (private because it contains lab solutions; shared with Joe) https://github.com/aditi-bhaskar/cs140e-picture-proj.git
 
 
 ### Code:
