@@ -1,24 +1,19 @@
 
 PROGS= 1-test-pad.c
 
-
-
 ###################
 
+# NOTE THAT GPIO.C IS A LAB FOR THE COURSE
+# SO ONLY THE OBJECT FILE IS INCLUDED HERE
+#  **** DO NOT MAKE CLEAN!!! ****
+# worst case, there is a copy of gpio.o in the top level o_copies directory
+
 # swap these if your bootloader doesn't work.
-BOOTLOADER = my-install
+# BOOTLOADER = my-install
 BOOTLOADER = pi-install
 
 
 L := $(CS140E_2025_PATH)/libpi/
-# uncomment this if you want to use the staff
-# STAFF_OBJS := $(L)/staff-objs/staff-sw-uart.o
-
-# if doing checkoff use both uart and cstart.
-ifdef CHECKOFF
-    COMMON_SRC = sw-uart.c
-    PROGS= $(wildcard [01234]-*.c)
-endif
 
 include $(CS140E_2025_PATH)/libpi/mk/Makefile.template-fixed
 

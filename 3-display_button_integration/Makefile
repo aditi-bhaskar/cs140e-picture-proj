@@ -1,8 +1,6 @@
 
 PROGS= 1-test-pad-disp.c
 
-
-
 ###################
 
 STAFF_OBJS += staff-faster-i2c.o 
