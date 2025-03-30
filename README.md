@@ -1,6 +1,4 @@
 ## SUZITI File System
- - ON GITHUB: (private because it contains lab solutions; shared with Joe) https://github.com/aditi-bhaskar/cs140e-picture-proj.git
-
 
 ### Code:
 Our final "make"-able code run during project demos is in 5-fat-laptop-i2c/. The "not-main" (aka main) file is 1-test-fat-laptop.c. All other folders hold different stages of the project.
