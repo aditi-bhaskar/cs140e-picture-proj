@@ -1,6 +1,6 @@
 # our notmain code:
 
-PROGS = 1-test-fat-laptop.c
+PROGS = main.c
 
 ####################
 
@@ -10,7 +10,6 @@ COMMON_SRC += mbr.c
 COMMON_SRC += fat32.c
 
 STAFF_OBJS += $(CS140E_2025_PATH)/libpi/staff-objs/kmalloc.o
-# STAFF_OBJS += staff-faster-i2c.o 
 
 CFLAGS  = -Iexternal-code
 COMMON_SRC += pi-sd.c mbr-helpers.c fat32-helpers.c fat32-lfn-helpers.c external-code/unicode-utf8.c external-code/emmc.c
