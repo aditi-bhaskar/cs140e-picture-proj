@@ -1,7 +1,7 @@
 ## SUZITI File System
 The SUZITI File System is an implementation of the FAT32 file system for the Rasberry Pi (r/pi). We connect it with a small graphical display and 5 buttons to let a user navigate through the filesystem on the SD card of the r/pi, create files/directories and view/edit text and images; all with our own implementation of I2C and gorgeous UI!
 
-![Photo of Suziti Filesystem](demo-materials/suziti.jpg)
+![Photo of Suziti Filesystem](suziti-filesystem/demo-materials/suziti.jpg)
 
 ### Features:
  - Custom FAT32 implementation for the r/pi
