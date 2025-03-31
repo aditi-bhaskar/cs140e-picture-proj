@@ -1,7 +1,11 @@
 ## SUZITI File System
+The SUZITI File System is an implementation of the FAT32 file system for the Rasberry Pi (r/pi). We connect it with a small graphical display and 5 buttons to let a user navigate through the filesystem on the SD card of the r/pi, create files/directories and view/edit text and images; all with our own implementation of I2C and gorgeous UI!
+
 
 ### Code:
-Our final "make"-able code run during project demos is in 5-fat-laptop-i2c/. The "not-main" (aka main) file is 1-test-fat-laptop.c. All other folders hold different stages of the project.
+All relevant code is under 5-fat-laptop-i2c/ (lower numbered folders represent earlier of our implementation process). 
+
+Our final "make"-able code is in 5-fat-laptop-i2c/. The "not-main" (aka main) file is 1-test-fat-laptop.c. All other folders hold different stages of the project.
 
 ### Features:
  - (Device) Display. added a new device to r/pi; a display! (SSD1306)
@@ -30,4 +34,3 @@ see 5-fat-laptop-i2c/bitbang-i2c.c
 ### Citations:
  - display based on adafruit code examples (in folder in repo)
  - got symbol displayed on home screen somewhere on reddit
-
