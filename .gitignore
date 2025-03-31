@@ -10,6 +10,8 @@ staff-*.c
 *.scratch
 staff
 *.o
+!suziti-filesystem/0-o_file_copies/fat32.o
+!suziti-filesystem/0-o_file_copies/gpio.o
 *.bin
 *.d
 *.list
