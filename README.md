@@ -24,6 +24,9 @@ The SUZITI File System is an implementation of the FAT32 file system for the Ras
     - Designed and soldered buttons to communicate with r/pi via GPIO
   - "Laptop" 3D print
     - Created custom CAD to hold display and buttons [here](https://cad.onshape.com/documents/8ae28c1d1a02ab9bf86b04ab/w/4935831e12860cc02aea9ffd/e/c0c3fcff074e33fbb3bb3b89)
+
+### Use:
+  - Connect device to your laptop and run "make" in terminal inside the suziti-filesystem folder. 
  
 ### Team Contributions:
  - Suze: Led fat32 implementation, file navigation, pbm/txt open & edit, UI + design
