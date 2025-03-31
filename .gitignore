@@ -16,3 +16,4 @@ staff
 *.d
 *.list
 *.elf
+*.vscode
